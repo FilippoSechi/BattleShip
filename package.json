@@ -1,29 +1,18 @@
 {
-  "name": "battleships",
+  "name": "pet-shop",
   "version": "1.0.0",
-  "description": "Multiplayer Battleship Game",
-  "main": "server.js",
+  "description": "",
+  "main": "truffle.js",
+  "directories": {
+    "test": "test"
+  },
   "scripts": {
-    "start": "node server",
-    "dev": "nodemon server"
+    "dev": "lite-server",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/kubowania/battleships.git"
-  },
-  "keywords": [],
   "author": "",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/kubowania/battleships/issues"
-  },
-  "homepage": "https://github.com/kubowania/battleships#readme",
-  "dependencies": {
-    "express": "^4.17.1",
-    "merkletreejs": "^0.3.10",
-    "socket.io": "^2.3.0"
-  },
   "devDependencies": {
-    "nodemon": "^2.0.4"
+    "lite-server": "^2.3.0"
   }
 }
