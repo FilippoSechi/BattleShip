@@ -1,36 +1,42 @@
 // npm install merkletreejs
-const { MerkleTree } = require('merkletreejs')
+
+const { MerkleTree } = require('merkletreejs');
 const crypto = require('crypto');
-const SHA256 = require('crypto-js/sha256')
+const keccak256 = require('keccak256');
 
-class Tree{
+class Tree {
+  constructor(transactions) {
+    this.transactions = transactions;
+    this.salts = transactions.map(() => crypto.randomBytes(2));
 
-    constructor(transactions){
-        this.saltMap = new Map();
+    const leaves = transactions.map((transaction, index) => keccak256(transaction + this.salts[index]));
+    this.tree = new MerkleTree(leaves, keccak256);
+  }
 
-        transactions.forEach(x => {
-            this.saltMap.set(x,crypto.randomBytes(16).toString('hex'))
-        });
+  getRoot() {
+    return this.tree.getRoot();
+  }
 
-        const leaves = transactions.map(x => SHA256(x+this.saltMap.get(x)));
-        this.tree = new MerkleTree(leaves, SHA256);
+  getProof(index) {
+    if (index < 0 || index >= this.salts.length) {
+      throw new Error("Invalid index");
     }
 
-    getRoot(){
-        return this.tree.getRoot().toString('hex');
-    }
-
-    getProof(transaction){
-        const salt = this.saltMap.get(transaction);
-        const leaf = SHA256(transaction+salt);
-        return {"proof":this.tree.getProof(leaf),
-                "salt":salt
-                };
-    }
+    const salt = this.salts[index];
+    const leaf = keccak256(this.transactions[index] + salt);
+    return {
+      "proof": this.tree.getProof(leaf),
+      "salt": salt,
+    };
+  }
 }
 
-const T = new Tree(['a','b','c','d']);
-let proof = T.getProof('a'); //return a dict with keys "proof" and "salt"
+const T = new Tree(['0', '1', '1', '0']);
+let index = 1;
+let proof = T.getProof(index); // return a dict with keys "proof" and "salt"
 let root = T.getRoot();
-let leaf = SHA256('a'+proof["salt"]);
-console.log(MerkleTree.verify(proof["proof"], leaf, root)) // true
+let result = T.transactions[index];
+let leaf = keccak256(result + proof["salt"]);
+
+console.log(T.tree.verify(proof["proof"], leaf, root)); // true
+//verify.call(root, result, proof["salt"], proof)
