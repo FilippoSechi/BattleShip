@@ -1,25 +1,9 @@
 App = {
   web3Provider: null,
   contracts: {},
+  gameId: 0,
 
   init: async function() {
-    // Load pets.
-    $.getJSON('../pets.json', function(data) {
-      var petsRow = $('#petsRow');
-      var petTemplate = $('#petTemplate');
-
-      for (i = 0; i < data.length; i ++) {
-        petTemplate.find('.panel-title').text(data[i].name);
-        petTemplate.find('img').attr('src', data[i].picture);
-        petTemplate.find('.pet-breed').text(data[i].breed);
-        petTemplate.find('.pet-age').text(data[i].age);
-        petTemplate.find('.pet-location').text(data[i].location);
-        petTemplate.find('.btn-adopt').attr('data-id', data[i].id);
-
-        petsRow.append(petTemplate.html());
-      }
-    });
-
     return await App.initWeb3();
   },
 
@@ -36,10 +20,10 @@ App = {
       App.web3Provider = window.web3.currentProvider;
     }
     else{
-      App.web3Provider = new Web3.providers.HttpProvider('http://localhost:7545');
+      App.web3Provider = new Web3.provider.HttpProvider('http://localhost:7545');
     }
 
-    Web3 = new Web3(App.web3Provider);
+    web3 = new Web3(App.web3Provider);
     return App.initContract();
   },
 
@@ -49,20 +33,76 @@ App = {
       App.contracts.Battleship = TruffleContract(BattleshipArtifact);
 
       App.contracts.Battleship.setProvider(App.web3Provider);
-
-      return App.startGame();
     });
 
     return App.bindEvents();
   },
-
+  
   bindEvents: function() {
-    $(document).on('click', '.btn-adopt', App.handleAdopt);
+    $(document).on('click', '#rand_game', App.joinRandomGame);
+    $(document).on('click', '#priv_game', App.createPrivateGame);
+    $(document).on('click', '#join_game', App.joinSpecificGame);
   },
 
-  logga: function(stringa){
-    console.log(stringa);
+  joinRandomGame: function() {
+    // Call joinRandomgame()
   },
+  
+  
+  joinSpecificGame: function() {
+    let input = document.getElementById("gameIDInput").value;
+  
+    // Check if the input contains only numeric characters
+    if (!/^\d+$/.test(input)) {
+      alert("Invalid Game ID. Please enter only numeric characters.");
+      return;
+    }
+
+    let gameId = parseInt(input, 10);
+
+    web3.eth.getAccounts(function(error, accounts) {
+      if (error) {
+        console.log(error);
+      }
+      var account = accounts[0];
+      App.contracts.Battleship.deployed().then(function(instance) {
+        battleshipInstance = instance;
+        return battleshipInstance.joinGame(gameId,{ from: account });
+      }).then(function(result) {
+        // The createPrivateGame function should not return anything,
+        // so this block will be executed when the transaction is mined.
+          document.getElementById("gameIdDisplay").textContent  = result.logs[0].args.gameId;
+          App.gameId = parseInt(result.logs[0].args.gameId);
+          App.playerConnected(1);
+          App.playerConnected(2);
+        }
+        ).catch(e => {
+        console.error(e);
+      });
+    });
+  },
+  
+  createPrivateGame: function() {
+    web3.eth.getAccounts(function(error, accounts) {
+      if (error) {
+        console.log(error);
+      }
+      var account = accounts[0];
+      App.contracts.Battleship.deployed().then(function(instance) {
+        battleshipInstance = instance;
+        return battleshipInstance.createPrivateGame({ from: account });
+      }).then(function(result) {
+        // The createPrivateGame function should not return anything,
+        // so this block will be executed when the transaction is mined.
+          document.getElementById("gameIdDisplay").textContent  = result.logs[0].args.gameId;
+          App.gameId = parseInt(result.logs[0].args.gameId);
+          App.playerConnected(1);
+        }
+        ).catch(e => {
+        console.error(e);
+      });
+    });
+  },  
 
   markAdopted: function() {
     var adoptionInstance;
@@ -79,6 +119,14 @@ App = {
       console.log(err.message);
     });
   },
+
+
+  playerConnected: function(num) {
+    let player = `.p${parseInt(num)}`
+    document.querySelector(`${player} .connected`).classList.toggle('active')
+    document.querySelector(player).style.fontWeight = 'bold'
+  },
+
 
   handleAdopt: function(event) {
     event.preventDefault();
@@ -260,12 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
       revealSquare(classList)
       playGameMulti(socket)
     })
-
-    function playerConnectedOrDisconnected(num) {
-      let player = `.p${parseInt(num) + 1}`
-      document.querySelector(`${player} .connected`).classList.toggle('active')
-      if(parseInt(num) === playerNum) document.querySelector(player).style.fontWeight = 'bold'
-    }
   }
 */
   //Create Board
@@ -340,45 +382,75 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function dragDrop() {
-    let shipNameWithLastId = draggedShip.lastChild.id
-    let shipClass = shipNameWithLastId.slice(0, -2)
-    // console.log(shipClass)
-    let lastShipIndex = parseInt(shipNameWithLastId.substr(-1))
-    let shipLastId = lastShipIndex + parseInt(this.dataset.id)
-    // console.log(shipLastId)
-    const notAllowedHorizontal = [0,10,20,30,40,50,60,70,80,90,1,11,21,31,41,51,61,71,81,91,2,22,32,42,52,62,72,82,92,3,13,23,33,43,53,63,73,83,93]
-    const notAllowedVertical = [99,98,97,96,95,94,93,92,91,90,89,88,87,86,85,84,83,82,81,80,79,78,77,76,75,74,73,72,71,70,69,68,67,66,65,64,63,62,61,60]
-    
-    let newNotAllowedHorizontal = notAllowedHorizontal.splice(0, 10 * lastShipIndex)
-    let newNotAllowedVertical = notAllowedVertical.splice(0, 10 * lastShipIndex)
-
-    selectedShipIndex = parseInt(selectedShipNameWithIndex.substr(-1))
-
-    shipLastId = shipLastId - selectedShipIndex
-    // console.log(shipLastId)
-
-    if (isHorizontal && !newNotAllowedHorizontal.includes(shipLastId)) {
-      for (let i=0; i < draggedShipLength; i++) {
-        let directionClass
-        if (i === 0) directionClass = 'start'
-        if (i === draggedShipLength - 1) directionClass = 'end'
-        userSquares[parseInt(this.dataset.id) - selectedShipIndex + i].classList.add('taken', 'horizontal', directionClass, shipClass)
+    const shipNameWithLastId = draggedShip.lastChild.id;
+    const shipClass = shipNameWithLastId.slice(0, -2);
+    const lastShipIndex = parseInt(shipNameWithLastId.substr(-1));
+    let shipLastId = lastShipIndex + parseInt(this.dataset.id);
+  
+    const notAllowedHorizontal = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 1, 11, 21, 31, 41, 51, 61, 71, 81, 91, 2, 22, 32, 42, 52, 62, 72, 82, 92, 3, 13, 23, 33, 43, 53, 63, 73, 83, 93];
+    const notAllowedVertical = [99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78, 77, 76, 75, 74, 73, 72, 71, 70, 69, 68, 67, 66, 65, 64, 63, 62, 61, 60];
+  
+    let newNotAllowedHorizontal = notAllowedHorizontal.splice(0, 10 * lastShipIndex);
+    let newNotAllowedVertical = notAllowedVertical.splice(0, 10 * lastShipIndex);
+  
+    selectedShipIndex = parseInt(selectedShipNameWithIndex.substr(-1));
+    shipLastId = shipLastId - selectedShipIndex;
+  
+    const shipIsHorizontal = isHorizontal && !newNotAllowedHorizontal.includes(shipLastId);
+    const shipIsVertical = !isHorizontal && !newNotAllowedVertical.includes(shipLastId);
+  
+    let isValidPlacement = true;
+  
+    for (let i = 0; i < draggedShipLength; i++) {
+      let directionClass;
+      if (i === 0) directionClass = 'start';
+      if (i === draggedShipLength - 1) directionClass = 'end';
+  
+      const nextSquareIndexHorizontal = parseInt(this.dataset.id) - selectedShipIndex + i;
+      const nextSquareIndexVertical = parseInt(this.dataset.id) - selectedShipIndex + width * i;
+  
+      if (isHorizontal) {
+        if (
+          userSquares[nextSquareIndexHorizontal].classList.contains('taken') ||
+          newNotAllowedVertical.includes(nextSquareIndexHorizontal)
+        ) {
+          isValidPlacement = false;
+          break; // Abort placing the ship if any square is already taken or invalid (horizontal check)
+        }
+      } else {
+        if (
+          userSquares[nextSquareIndexVertical].classList.contains('taken') ||
+          newNotAllowedHorizontal.includes(nextSquareIndexVertical)
+        ) {
+          isValidPlacement = false;
+          break; // Abort placing the ship if any square is already taken or invalid (vertical check)
+        }
       }
-    //As long as the index of the ship you are dragging is not in the newNotAllowedVertical array! This means that sometimes if you drag the ship by its
-    //index-1 , index-2 and so on, the ship will rebound back to the displayGrid.
-    } else if (!isHorizontal && !newNotAllowedVertical.includes(shipLastId)) {
-      for (let i=0; i < draggedShipLength; i++) {
-        let directionClass
-        if (i === 0) directionClass = 'start'
-        if (i === draggedShipLength - 1) directionClass = 'end'
-        userSquares[parseInt(this.dataset.id) - selectedShipIndex + width*i].classList.add('taken', 'vertical', directionClass, shipClass)
+    }
+  
+    if (isValidPlacement) {
+      for (let i = 0; i < draggedShipLength; i++) {
+        let directionClass;
+        if (i === 0) directionClass = 'start';
+        if (i === draggedShipLength - 1) directionClass = 'end';
+  
+        const nextSquareIndexHorizontal = parseInt(this.dataset.id) - selectedShipIndex + i;
+        const nextSquareIndexVertical = parseInt(this.dataset.id) - selectedShipIndex + width * i;
+  
+        if (isHorizontal) {
+          userSquares[nextSquareIndexHorizontal].classList.add('taken', 'horizontal', directionClass, shipClass);
+        } else {
+          userSquares[nextSquareIndexVertical].classList.add('taken', 'vertical', directionClass, shipClass);
+        }
       }
-    } else return
-
-    displayGrid.removeChild(draggedShip)
-    if(!displayGrid.querySelector('.ship')) allShipsPlaced = true
+    } else {
+      return; // Abort placing the ship if it overlaps with other ships
+    }
+  
+    displayGrid.removeChild(draggedShip);
+    if (!displayGrid.querySelector('.ship')) allShipsPlaced = true;
   }
-
+  
   function dragEnd() {
     // console.log('dragend')
   }
@@ -509,5 +581,5 @@ document.addEventListener('DOMContentLoaded', () => {
   function gameOver() {
     isGameOver = true
   }
-})
 
+})

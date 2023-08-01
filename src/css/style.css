@@ -299,3 +299,12 @@ body {
   opacity: 1;
   text-decoration: none;
 }
+
+.button-group {
+  margin-left: 10px;
+  margin-right: 10px;
+  margin-top: 10px;
+}
+#gameIdDisplay{
+  font-weight: bold;
+}

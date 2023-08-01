@@ -17,6 +17,19 @@
   </head>
   <body>
     <div class="container">
+      <div class="button-group">
+        <button class="btn" id="rand_game">Play with random opponent</button>
+      </div>
+      <div class="button-group">
+        <button class="btn" id="priv_game">Play with a friend</button>
+        <span id="gameIdDisplay" class="game-id-display"></span>
+      </div>
+      <div class="button-group">
+        <button class="btn" id="join_game">Join game</button>
+        <input type="text" id="gameIDInput" placeholder="Enter Game ID">
+      </div>
+    </div>
+    <div class="container">
       <div class="player p1">
         Player 1
         <div class="connected">Connected</div>
@@ -37,7 +50,6 @@
 
     <div class="container hidden-info">
       <div class="setup-buttons" id="setup-buttons">
-        <button id="start" class="btn">Start Game</button>
         <button id="rotate" class="btn">Rotate Your Ships</button>
       </div>
       <h3 id="whose-go" class="info-text">Your Go</h3>
