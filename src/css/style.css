@@ -298,6 +298,7 @@ body {
 .ready.active {
   opacity: 1;
   text-decoration: none;
+  font-weight: bold;
 }
 
 .button-group {

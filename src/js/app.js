@@ -1,7 +1,15 @@
+const GameStates= {
+  Waiting: 0,
+  Connected: 1,
+  Ready: 2,
+  Over: 3
+};
+
 App = {
   web3Provider: null,
   contracts: {},
   gameId: 0,
+  currentState : GameStates.Waiting,
 
   init: async function() {
     return await App.initWeb3();
@@ -75,6 +83,7 @@ App = {
           App.gameId = parseInt(result.logs[0].args.gameId);
           App.playerConnected(1);
           App.playerConnected(2);
+          App.currentState = GameStates.Connected;
         }
         ).catch(e => {
         console.error(e);
@@ -94,15 +103,42 @@ App = {
       }).then(function(result) {
         // The createPrivateGame function should not return anything,
         // so this block will be executed when the transaction is mined.
-          document.getElementById("gameIdDisplay").textContent  = result.logs[0].args.gameId;
-          App.gameId = parseInt(result.logs[0].args.gameId);
-          App.playerConnected(1);
+          battleshipInstance.GameCreated().watch((error,result)=>{
+            if(error)
+              console.log(error);
+            else if(result.args.player1 == account){
+              App.gameId = parseInt(result.args.gameId);
+              document.getElementById("gameIdDisplay").textContent = App.gameId;
+              App.playerConnected(1);
+              App.currentState = GameStates.Waiting;
+            }
+          });
+          App.waitSecondPlayer();
         }
         ).catch(e => {
         console.error(e);
       });
     });
   },  
+
+  waitSecondPlayer: function (){
+    App.contracts.Battleship.deployed().then(function(instance){
+      battleshipInstance.PlayerJoined().watch((error,result)=>{
+        if(error)
+          console.log(error);
+        else{
+          const gameID = parseInt(result.args.gameId);
+          if(App.gameId == gameID && App.currentState == GameStates.Waiting){
+            console.log("EVENT player2 joined: ",gameID);
+            App.playerConnected(2);
+            App.currentState = GameStates.Connected;
+          }
+        }
+      });
+    }).catch(e => {
+      console.error(e);
+    });
+  }, 
 
   markAdopted: function() {
     var adoptionInstance;
@@ -122,9 +158,8 @@ App = {
 
 
   playerConnected: function(num) {
-    let player = `.p${parseInt(num)}`
-    document.querySelector(`${player} .connected`).classList.toggle('active')
-    document.querySelector(player).style.fontWeight = 'bold'
+    let player = `.p${parseInt(num)}`;
+    document.querySelector(`${player} .connected`).classList.toggle('active');
   },
 
 
