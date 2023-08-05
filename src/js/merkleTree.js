@@ -1,6 +1,6 @@
 // npm install merkletreejs
 
-const { MerkleTree } = require('merkletreejs');
+const { MerkleTree } = require("merkletreejs");
 const crypto = require('crypto');
 const keccak256 = require('keccak256');
 
@@ -31,7 +31,8 @@ class Tree {
   }
 }
 
-const T = new Tree(['0', '1', '1', '0']);
+/*
+const T = new Tree([true, false, true, false]);
 let index = 1;
 let proof = T.getProof(index); // return a dict with keys "proof" and "salt"
 let root = T.getRoot();
@@ -40,3 +41,4 @@ let leaf = keccak256(result + proof["salt"]);
 
 console.log(T.tree.verify(proof["proof"], leaf, root)); // true
 //verify.call(root, result, proof["salt"], proof)
+*/

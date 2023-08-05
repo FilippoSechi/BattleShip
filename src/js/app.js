@@ -5,194 +5,6 @@ const GameStates= {
   Over: 3
 };
 
-App = {
-  web3Provider: null,
-  contracts: {},
-  gameId: 0,
-  currentState : GameStates.Waiting,
-
-  init: async function() {
-    return await App.initWeb3();
-  },
-
-  initWeb3: async function() {
-    if(window.ethereum){
-      App.web3Provider = window.ethereum;
-      try{
-        await window.ethereum.enable();
-      } catch(error){
-        console.error("User denied account access");
-      }
-    }
-    else if(window.web3){
-      App.web3Provider = window.web3.currentProvider;
-    }
-    else{
-      App.web3Provider = new Web3.provider.HttpProvider('http://localhost:7545');
-    }
-
-    web3 = new Web3(App.web3Provider);
-    return App.initContract();
-  },
-
-  initContract: function() {
-    $.getJSON("Battleship.json",function(data) {
-      var BattleshipArtifact = data;
-      App.contracts.Battleship = TruffleContract(BattleshipArtifact);
-
-      App.contracts.Battleship.setProvider(App.web3Provider);
-    });
-
-    return App.bindEvents();
-  },
-  
-  bindEvents: function() {
-    $(document).on('click', '#rand_game', App.joinRandomGame);
-    $(document).on('click', '#priv_game', App.createPrivateGame);
-    $(document).on('click', '#join_game', App.joinSpecificGame);
-  },
-
-  joinRandomGame: function() {
-    // Call joinRandomgame()
-  },
-  
-  
-  joinSpecificGame: function() {
-    let input = document.getElementById("gameIDInput").value;
-  
-    // Check if the input contains only numeric characters
-    if (!/^\d+$/.test(input)) {
-      alert("Invalid Game ID. Please enter only numeric characters.");
-      return;
-    }
-
-    let gameId = parseInt(input, 10);
-
-    web3.eth.getAccounts(function(error, accounts) {
-      if (error) {
-        console.log(error);
-      }
-      var account = accounts[0];
-      App.contracts.Battleship.deployed().then(function(instance) {
-        battleshipInstance = instance;
-        return battleshipInstance.joinGame(gameId,{ from: account });
-      }).then(function(result) {
-        // The createPrivateGame function should not return anything,
-        // so this block will be executed when the transaction is mined.
-          document.getElementById("gameIdDisplay").textContent  = result.logs[0].args.gameId;
-          App.gameId = parseInt(result.logs[0].args.gameId);
-          App.playerConnected(1);
-          App.playerConnected(2);
-          App.currentState = GameStates.Connected;
-        }
-        ).catch(e => {
-        console.error(e);
-      });
-    });
-  },
-  
-  createPrivateGame: function() {
-    web3.eth.getAccounts(function(error, accounts) {
-      if (error) {
-        console.log(error);
-      }
-      var account = accounts[0];
-      App.contracts.Battleship.deployed().then(function(instance) {
-        battleshipInstance = instance;
-        return battleshipInstance.createPrivateGame({ from: account });
-      }).then(function(result) {
-        // The createPrivateGame function should not return anything,
-        // so this block will be executed when the transaction is mined.
-          battleshipInstance.GameCreated().watch((error,result)=>{
-            if(error)
-              console.log(error);
-            else if(result.args.player1 == account){
-              App.gameId = parseInt(result.args.gameId);
-              document.getElementById("gameIdDisplay").textContent = App.gameId;
-              App.playerConnected(1);
-              App.currentState = GameStates.Waiting;
-            }
-          });
-          App.waitSecondPlayer();
-        }
-        ).catch(e => {
-        console.error(e);
-      });
-    });
-  },  
-
-  waitSecondPlayer: function (){
-    App.contracts.Battleship.deployed().then(function(instance){
-      battleshipInstance.PlayerJoined().watch((error,result)=>{
-        if(error)
-          console.log(error);
-        else{
-          const gameID = parseInt(result.args.gameId);
-          if(App.gameId == gameID && App.currentState == GameStates.Waiting){
-            console.log("EVENT player2 joined: ",gameID);
-            App.playerConnected(2);
-            App.currentState = GameStates.Connected;
-          }
-        }
-      });
-    }).catch(e => {
-      console.error(e);
-    });
-  }, 
-
-  markAdopted: function() {
-    var adoptionInstance;
-    App.contracts.Battleship.deployed().then(function (instance) {
-      adoptionInstance = instance;
-      return adoptionInstance.getAdopters.call();
-    }).then(function (adopters){
-      for(i = 0; i < adopters.length; i++){
-        if(adopters[i] !== '0x0000000000000000000000000000000000000000'){
-          $('.panel-pet').eq(i).find('button').text('Success').attr('disabled',true);
-        }
-      }
-    }).catch(function (err){
-      console.log(err.message);
-    });
-  },
-
-
-  playerConnected: function(num) {
-    let player = `.p${parseInt(num)}`;
-    document.querySelector(`${player} .connected`).classList.toggle('active');
-  },
-
-
-  handleAdopt: function(event) {
-    event.preventDefault();
-
-    var petId = parseInt($(event.target).data('id'));
-    var adoptionInstance;
-    web3.eth.getAccounts(function(error, accounts) {
-      if(error){ console.log(error);}
-      var account = accounts[0];
-      App.contracts.Battleship.deployed().then(function (instance) {
-        adoptionInstance = instance;
-        return adoptionInstance.adopt(petId, {from: account});
-      }).then(function(){
-        return App.markAdopted();
-      }).catch(function(err){
-        console.log(err.message);
-      });
-    });
-    
-  }
-
-};
-
-$(function() {
-  $(window).load(function() {
-    App.init();
-  });
-});
-
-
-
 document.addEventListener('DOMContentLoaded', () => {
   const userGrid = document.querySelector('.grid-user')
   const computerGrid = document.querySelector('.grid-computer')
@@ -203,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const cruiser = document.querySelector('.cruiser-container')
   const battleship = document.querySelector('.battleship-container')
   const carrier = document.querySelector('.carrier-container')
-  const startButton = document.querySelector('#start')
+  const readyButton = document.querySelector('#ready')
   const rotateButton = document.querySelector('#rotate')
   const turnDisplay = document.querySelector('#whose-go')
   const infoDisplay = document.querySelector('#info')
@@ -213,12 +25,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let isHorizontal = true
   let isGameOver = false
   let currentPlayer = 'user'
+  let playerNum = 1
   const width = 10
-  let playerNum = 0
   let ready = false
-  let enemyReady = false
   let allShipsPlaced = false
   let shotFired = -1
+  let currentState = GameStates.Waiting;
   //Ships
   const shipArray = [
     {
@@ -511,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function playerReady(num) {
-    let player = `.p${parseInt(num) + 1}`
+    let player = `.p${parseInt(num)}`
     document.querySelector(`${player} .ready`).classList.toggle('active')
   }
 
@@ -616,5 +428,200 @@ document.addEventListener('DOMContentLoaded', () => {
   function gameOver() {
     isGameOver = true
   }
+
+  function playerConnected (num){
+    let player = `.p${parseInt(num)}`;
+    document.querySelector(`${player} .connected`).classList.toggle('active');
+  }
+
+  function bindEvents() {
+    $(document).on('click', '#rand_game', App.joinRandomGame);
+    $(document).on('click', '#priv_game', App.createPrivateGame);
+    $(document).on('click', '#join_game', App.joinSpecificGame);
+    $(document).on('click', '#ready', App.ready);
+  }
+
+  App = {
+    web3Provider: null,
+    contracts: {},
+    gameId: 0,
+    account: '',
+    merkleTree: null,
+  
+    init: async function() {
+      return await App.initWeb3();
+    },
+  
+    initWeb3: async function() {
+      if(window.ethereum){
+        App.web3Provider = window.ethereum;
+        try{
+          await window.ethereum.enable();
+        } catch(error){
+          console.error("User denied account access");
+        }
+      }
+      else if(window.web3){
+        App.web3Provider = window.web3.currentProvider;
+      }
+      else{
+        App.web3Provider = new Web3.provider.HttpProvider('http://localhost:7545');
+      }
+  
+      web3 = new Web3(App.web3Provider);
+      return App.initContract();
+    },
+  
+    initContract: function() {
+      $.getJSON("Battleship.json",function(data) {
+        var BattleshipArtifact = data;
+        App.contracts.Battleship = TruffleContract(BattleshipArtifact);
+  
+        App.contracts.Battleship.setProvider(App.web3Provider);
+      });
+  
+      return bindEvents();
+    },
+  
+    joinRandomGame: function() {
+      web3.eth.getAccounts(function(error, accounts) {
+        if (error) {
+          console.log(error);
+        }
+        App.account = accounts[0];
+        App.contracts.Battleship.deployed().then(function(instance) {
+          battleshipInstance = instance;
+          return battleshipInstance.joinRandomGame({ from: App.account });
+        }).then(function(result) {
+            if(result.logs[0].event === "GameCreated"){
+              App.gameId = parseInt(result.logs[0].args.gameId);
+              playerConnected(1);
+              currentState = GameStates.Waiting;
+              console.log("EVENT GameCreated: ",App.gameId);
+              App.playerJoinedWatcher(battleshipInstance.PlayerJoined());
+            }
+            else if(result.logs[0].event === "PlayerJoined" && currentState == GameStates.Waiting){
+              App.gameId = parseInt(result.logs[0].args.gameId);
+              console.log("EVENT PlayerJoined: ",App.gameId);
+              playerConnected(1);
+              playerConnected(2);
+              playerNum = 2;
+              currentPlayer = "enemy";
+              currentState = GameStates.Connected;
+            }
+          }).catch(e => {
+          console.error(e.message);
+        })}
+      )
+    },
+     
+    joinSpecificGame: function() {
+      let input = document.getElementById("gameIDInput").value;
+    
+      // Check if the input contains only numeric characters
+      if (!/^\d+$/.test(input)) {
+        alert("Invalid Game ID. Please enter only numeric characters.");
+        return;
+      }
+  
+      let gameId = parseInt(input, 10);
+  
+      web3.eth.getAccounts(function(error, accounts) {
+        if (error) {
+          console.log(error);
+        }
+        App.account = accounts[0];
+        App.contracts.Battleship.deployed().then(function(instance) {
+          battleshipInstance = instance;
+          return battleshipInstance.joinGame(gameId,{ from: App.account });
+        }).then(function(result) {
+          // The createPrivateGame function should not return anything,
+          // so this block will be executed when the transaction is mined.
+            document.getElementById("gameIdDisplay").textContent = result.logs[0].args.gameId;
+            App.gameId = parseInt(result.logs[0].args.gameId);
+            console.log("EVENT player2 joined: ",App.gameId);
+            playerConnected(1);
+            playerConnected(2);
+            playerNum = 2;
+            currentState = GameStates.Connected;
+            currentPlayer = "enemy";
+          }
+          ).catch(e => {
+          console.error(e.message);
+        });
+      });
+    },
+    
+    createPrivateGame: function() {
+      web3.eth.getAccounts(function(error, accounts) {
+        if (error) {
+          console.log(error);
+        }
+        App.account = accounts[0];
+        App.contracts.Battleship.deployed().then(function(instance) {
+          battleshipInstance = instance;
+          return battleshipInstance.createPrivateGame({ from: App.account });
+        }).then(function(result) {
+          // The createPrivateGame function should not return anything,
+          // so this block will be executed when the transaction is mined.
+            App.gameId = parseInt(result.logs[0].args.gameId);
+            document.getElementById("gameIdDisplay").textContent = App.gameId;
+            playerConnected(1);
+            currentState = GameStates.Waiting;
+            console.log("EVENT GameCreated: ",App.gameId);
+  
+            App.playerJoinedWatcher(battleshipInstance.PlayerJoined());
+          }).catch(e => {
+          console.error(e.message);
+        })}
+      );
+    },
+  
+    playerJoinedWatcher: function (event){
+      event.watch((error,result)=>{
+          if(error)
+            console.log(error);
+          else{
+            const gameID = parseInt(result.args.gameId);
+            if(App.gameId == gameID && currentState == GameStates.Waiting){
+              console.log("EVENT PlayerJoined: ",gameID);
+              playerConnected(2);
+              currentState = GameStates.Connected;
+            }
+          }
+        });
+    }, 
+
+    ready: function(){
+      if(!allShipsPlaced){
+        infoDisplay.innerHTML = "Please place all ships"
+        return;
+      }
+      if(currentState != GameStates.Connected){
+        infoDisplay.innerHTML = "Please wait for the other player"
+        return;
+      }
+      App.buildTree();
+      playerReady(playerNum);
+    },
+
+    buildTree: function(){
+      let ship_positions = [];
+      userSquares.forEach(element => {
+        if(element.classList.contains('taken'))
+          ship_positions.push(true);
+        else
+          ship_positions.push(false);
+      });
+      App.merkleTree = new Tree(ship_positions);
+    },
+
+  };
+
+  $(function() {
+    $(window).load(function() {
+      App.init();
+    });
+  });
 
 })
