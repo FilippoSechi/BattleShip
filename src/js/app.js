@@ -1,3 +1,4 @@
+const Tree = require("./merkleTree");
 const GameStates= {
   Waiting: 0,
   Connected: 1,

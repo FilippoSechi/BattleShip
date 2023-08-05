@@ -1,13 +1,14 @@
 // npm install merkletreejs
+//npx webpack --config src/js/webpack.config.js
 
 const { MerkleTree } = require("merkletreejs");
-const crypto = require('crypto');
 const keccak256 = require('keccak256');
+const Buffer = require('buffer').Buffer;
 
 class Tree {
   constructor(transactions) {
     this.transactions = transactions;
-    this.salts = transactions.map(() => crypto.randomBytes(2));
+    this.salts = transactions.map(() => crypto.getRandomValues(Buffer.alloc(2)).toString("hex"));
 
     const leaves = transactions.map((transaction, index) => keccak256(transaction + this.salts[index]));
     this.tree = new MerkleTree(leaves, keccak256);
@@ -30,6 +31,8 @@ class Tree {
     };
   }
 }
+
+module.exports = Tree;
 
 /*
 const T = new Tree([true, false, true, false]);

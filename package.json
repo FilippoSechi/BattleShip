@@ -8,15 +8,22 @@
   },
   "scripts": {
     "dev": "lite-server",
+    "build": "webpack --mode production",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "lite-server": "^2.3.0"
+    "lite-server": "^2.3.0",
+    "webpack": "^5.88.2",
+    "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "buffer": "^6.0.3",
+    "buffer-polyfill": "^6.0.3",
+    "crypto": "^1.0.1",
     "keccak256": "^1.0.6",
-    "merkletreejs": "^0.3.10"
+    "merkletreejs": "^0.3.10",
+    "securerandom": "^0.0.2"
   }
 }
