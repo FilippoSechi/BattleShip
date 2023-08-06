@@ -10,12 +10,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const userGrid = document.querySelector('.grid-user')
   const computerGrid = document.querySelector('.grid-computer')
   const displayGrid = document.querySelector('.grid-display')
-  const ships = document.querySelectorAll('.ship')
-  const destroyer = document.querySelector('.destroyer-container')
-  const submarine = document.querySelector('.submarine-container')
-  const cruiser = document.querySelector('.cruiser-container')
-  const battleship = document.querySelector('.battleship-container')
-  const carrier = document.querySelector('.carrier-container')
+  let destroyer = null
+  let submarine = null
+  let cruiser = null
+  let battleship = null
+  let carrier = null
   const readyButton = document.querySelector('#ready')
   const rotateButton = document.querySelector('#rotate')
   const turnDisplay = document.querySelector('#whose-go')
@@ -23,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const setupButtons = document.getElementById('setup-buttons')
   const userSquares = []
   const computerSquares = []
+  let ships = null;
   let isHorizontal = true
   let isGameOver = false
   let currentPlayer = 'user'
@@ -71,9 +71,20 @@ document.addEventListener('DOMContentLoaded', () => {
     },
   ]
 
+
   createBoard(userGrid, userSquares)
   createBoard(computerGrid, computerSquares)
-  
+  generateShipContainers()
+
+  //Store the expected number of occuped cells, after correct placement of all ships
+  const tot_ships = () => {
+    let secondLevelChildren = 0;
+    for (let child of displayGrid.children) 
+      secondLevelChildren += child.children.length;
+
+    return secondLevelChildren;
+    }
+  const expectedNumShip = tot_ships();
   /*startMultiPlayer()
 
   // Multiplayer
@@ -158,6 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
     })
   }
 */
+  
   //Create Board
   function createBoard(grid, squares) {
     for (let i = 0; i < width*width; i++) {
@@ -166,6 +178,60 @@ document.addEventListener('DOMContentLoaded', () => {
       grid.appendChild(square)
       squares.push(square)
     }
+  }
+  
+  //Clear and reset game board
+  function resetBoard (grid,squares){
+    while (squares.length > 0) {
+      squares.pop();
+    }
+    while (grid.firstChild) {
+      grid.removeChild(grid.lastChild);
+    }
+    createBoard(grid,squares);
+  }
+  
+  //Generate ships
+  function generateShipContainers(){
+    //Create html elements
+    for (const ship of shipArray) {
+      const shipContainer = document.createElement('div');
+      shipContainer.classList.add('ship');
+      shipContainer.classList.add(`${ship.name}-container`);
+      shipContainer.setAttribute('draggable',true);
+    
+      for (let index = 0; index < ship.directions[0].length; index++) {
+        const div = document.createElement('div');
+        div.id = `${ship.name}-${index}`;
+        shipContainer.appendChild(div);
+      }
+    
+      displayGrid.appendChild(shipContainer);
+    }
+
+    //Initialization of ship related events
+    ships = document.querySelectorAll('.ship');
+
+    ships.forEach(ship => ship.addEventListener('mousedown', (e) => {
+      selectedShipNameWithIndex = e.target.id
+      // console.log(selectedShipNameWithIndex)
+    }))
+
+    //move around user ship
+    ships.forEach(ship => ship.addEventListener('dragstart', dragStart))
+    userSquares.forEach(square => square.addEventListener('dragstart', dragStart))
+    userSquares.forEach(square => square.addEventListener('dragover', dragOver))
+    userSquares.forEach(square => square.addEventListener('dragenter', dragEnter))
+    userSquares.forEach(square => square.addEventListener('dragleave', dragLeave))
+    userSquares.forEach(square => square.addEventListener('drop', dragDrop))
+    userSquares.forEach(square => square.addEventListener('dragend', dragEnd))
+
+    destroyer = document.querySelector('.destroyer-container')
+    submarine = document.querySelector('.submarine-container')
+    cruiser = document.querySelector('.cruiser-container')
+    battleship = document.querySelector('.battleship-container')
+    carrier = document.querySelector('.carrier-container')
+    isHorizontal = true;
   }
 
   //Rotate the ships
@@ -193,23 +259,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   rotateButton.addEventListener('click', rotate)
 
-  //move around user ship
-  ships.forEach(ship => ship.addEventListener('dragstart', dragStart))
-  userSquares.forEach(square => square.addEventListener('dragstart', dragStart))
-  userSquares.forEach(square => square.addEventListener('dragover', dragOver))
-  userSquares.forEach(square => square.addEventListener('dragenter', dragEnter))
-  userSquares.forEach(square => square.addEventListener('dragleave', dragLeave))
-  userSquares.forEach(square => square.addEventListener('drop', dragDrop))
-  userSquares.forEach(square => square.addEventListener('dragend', dragEnd))
 
   let selectedShipNameWithIndex
   let draggedShip
   let draggedShipLength
-
-  ships.forEach(ship => ship.addEventListener('mousedown', (e) => {
-    selectedShipNameWithIndex = e.target.id
-    // console.log(selectedShipNameWithIndex)
-  }))
 
   function dragStart() {
     draggedShip = this
@@ -248,10 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // console.log(shipLastId)
 
     if (isHorizontal && !newNotAllowedHorizontal.includes(shipLastId)) {
-      for(let i = 0; i < draggedShipLength; i++){
-        if(userSquares[parseInt(this.dataset.id) - selectedShipIndex + i].classList.contains('taken')) 
-          return;
-      }
       for (let i=0; i < draggedShipLength; i++) {
         let directionClass
         if (i === 0) directionClass = 'start'
@@ -261,10 +310,6 @@ document.addEventListener('DOMContentLoaded', () => {
     //As long as the index of the ship you are dragging is not in the newNotAllowedVertical array! This means that sometimes if you drag the ship by its
     //index-1 , index-2 and so on, the ship will rebound back to the displayGrid.
     } else if (!isHorizontal && !newNotAllowedVertical.includes(shipLastId)) {
-      for(let i = 0; i < draggedShipLength; i++){
-        if(userSquares[parseInt(this.dataset.id) - selectedShipIndex + width*i].classList.contains('taken')) 
-          return;
-      }
       for (let i=0; i < draggedShipLength; i++) {
         let directionClass
         if (i === 0) directionClass = 'start'
@@ -274,9 +319,34 @@ document.addEventListener('DOMContentLoaded', () => {
     } else return
 
     displayGrid.removeChild(draggedShip)
-    if(!displayGrid.querySelector('.ship')) allShipsPlaced = true
+    //Check if all ships are correctly placed
+    if(!displayGrid.querySelector('.ship')){ 
+      if(checkPlacementValidity()){
+        infoDisplay.innerHTML = ""
+        allShipsPlaced = true;
+        return;
+      }
+      else{
+        //Invalid placement. Reset all
+        resetBoard(userGrid, userSquares);
+        generateShipContainers();
+        infoDisplay.innerHTML = "Placement is not valid"
+        allShipsPlaced = false;
+        return;
+      }
+    }
   }
    
+  //Check if some ships where mistakenly placed
+  function checkPlacementValidity(){
+    let actualNumShip = 0;
+    for(const cell of userSquares){
+      if(cell.classList.contains('taken'))
+        actualNumShip++;
+    }
+    return actualNumShip == expectedNumShip;
+  }
+
   function dragEnd() {
     // console.log('dragend')
   }
@@ -301,6 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  //Highlights player status bar (READY)
   function playerReady(num) {
     let player = `.p${parseInt(num)}`
     document.querySelector(`${player} .ready`).classList.toggle('active')
@@ -408,6 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isGameOver = true
   }
 
+  //Highlights player status bar (CONNECTED)
   function playerConnected (num){
     let player = `.p${parseInt(num)}`;
     document.querySelector(`${player} .connected`).classList.toggle('active');

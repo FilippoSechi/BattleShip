@@ -8,7 +8,7 @@ const Buffer = require('buffer').Buffer;
 class Tree {
   constructor(transactions) {
     this.transactions = transactions;
-    this.salts = transactions.map(() => crypto.getRandomValues(Buffer.alloc(2)).toString("hex"));
+    this.salts = transactions.map(() => crypto.getRandomValues(Buffer.alloc(2)));
 
     const leaves = transactions.map((transaction, index) => keccak256(transaction + this.salts[index]));
     this.tree = new MerkleTree(leaves, keccak256);
