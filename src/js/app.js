@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const width = 10
   let ready = false
   let allShipsPlaced = false
-  let shotFired = -1
   //Ships
   const shipArray = [
     {
@@ -645,19 +644,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }, 
 
-    fire : function(square){
-      App.contracts.Battleship.deployed().then(function(instance) {
-        battleshipInstance = instance;
-        return battleshipInstance.fire(gameId,square,{ from: App.account });
-      }).then(function(result) {
-        
-          ////TODO: IMPLEMENT LOGIC FOR FIRING
-        }
-        ).catch(e => {
-        console.error(e.message);
-      });
-    },
-
     //Player is ready to commit its board
     ready: function(){
       //Check if all ships are placed
@@ -754,6 +740,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }).catch(e => {
         console.error(e.message);
       })
+  },
+
+  fire : function(square){
+    App.contracts.Battleship.deployed().then(function(instance) {
+      battleshipInstance = instance;
+      return battleshipInstance.fire(gameId,square,{ from: App.account });
+    }).then(function(result) {
+        //wait for the result
+        App.shotResult(instance,square);
+      }
+      ).catch(e => {
+      console.error(e.message);
+    });
+  },
+
+  shotResult : function(instance,square){
+    instance.ShotResult().watch((error,result)=>{
+      if(error)
+        console.log(error);
+      else{
+        const gameID = result.args.gameId;
+        const current_turn = getCurrentTurn();
+        //Check if event refers to the user's game and the selected coordinate is correct and it's user turn
+        if(App.gameId != gameID && square != result.args.coordinate &&  current_turn != App.account) return;
+
+        console.log("EVENT ShotResult: ",gameID,result.args.coordinate);
+        
+        const enemySquare = computerGrid.querySelector(`div[data-id='${shotFired}']`)
+        if (result.args.result == true) {
+          enemySquare.classList.add('boom')
+        } else {
+          enemySquare.classList.add('miss')
+        }
+        //TO BE IMPLEMENTED
+        //checkForWins()
+
+        turnDisplay.innerHTML = "Enemy's Go";
+      }
+    })
   },
 
   };

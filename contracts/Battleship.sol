@@ -10,11 +10,6 @@ contract Battleship {
     Over
   }
 
-  struct Shot {
-    uint8 coordinate;
-    bool result;
-  }
-
   struct Game {
     address player1;
     address player2;
@@ -23,7 +18,7 @@ contract Battleship {
     mapping(address => bytes32) merkleRoots;
     address current_turn;
     mapping(address => uint8) scores;
-    mapping(address => Shot[]) shots;
+    mapping(address => mapping(uint8 => bool)) shots;
     bool waiting_result;
   }
 
@@ -34,6 +29,7 @@ contract Battleship {
   event PlayerJoined(uint256 indexed gameId, address indexed player2);
   event PlayerReady(uint256 indexed gameId, address player);
   event Fire(uint256 indexed gameId, address player, uint8 indexed coordinate);
+  event ShotResult(uint256 indexed gameId, uint8 coordinate, bool result);
 
   function createGame(bool priv) private{
     uint256 gameId = totalGames++;
@@ -147,7 +143,7 @@ contract Battleship {
       return 2;
     if(games[gameId].gameState == States.Play)
       return 3;
-      
+
     return 4;
   }
 
@@ -160,11 +156,30 @@ contract Battleship {
     require(coordinate >= 0 && coordinate < 100, "Invalid coordinate");
     require(!game.waiting_result, "Waiting for the result of previous shots");
 
-    Shot memory missile;
-    missile.coordinate = coordinate;
-    game.shots[msg.sender].push(missile);
     game.waiting_result = true;
     
     emit Fire(gameId,msg.sender,coordinate);
+  }
+
+  function shotResult(uint256 gameId, uint8 coordinate, bool result, bytes2 salt, bytes32[] memory proof) external {
+    require(gameId < totalGames, "Invalid game ID");
+    Game storage game = games[gameId];
+    require(game.current_turn != msg.sender, "Not player turn");
+    require(game.gameState == States.Play,"Operation not allowed in this game state");
+    require(coordinate >= 0 && coordinate < 100, "Invalid coordinate");
+    require(game.player1 == msg.sender || game.player2 == msg.sender, "Player does not participate to this game");
+    require(game.waiting_result, "Currently not waiting a result");
+
+    address attacker = game.current_turn;
+
+    if(verify(game.merkleRoots[msg.sender], result, salt, proof)){
+      game.shots[attacker][coordinate] = result;
+      game.scores[attacker]++;
+      emit ShotResult(gameId,coordinate,result);
+    }
+    //else
+    //IMPLEMENT VERIFICATION FAILED
+      
+
   }
 }
