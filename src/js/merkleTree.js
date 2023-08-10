@@ -15,7 +15,7 @@ class Tree {
   }
 
   getRoot() {
-    return this.tree.getRoot();
+    return this.tree.getHexRoot();
   }
 
   getProof(index) {
@@ -26,7 +26,7 @@ class Tree {
     const salt = this.salts[index];
     const leaf = keccak256(this.transactions[index] + salt);
     return {
-      "proof": this.tree.getProof(leaf),
+      "proof": this.tree.getHexProof(leaf),
       "salt": salt,
     };
   }

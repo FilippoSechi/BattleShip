@@ -26,8 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let isHorizontal = true
   let playerNum = 1
   const width = 10
-  let ready = false
   let allShipsPlaced = false
+
   //Ships
   const shipArray = [
     {
@@ -505,7 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
               //Save gameId
               App.gameId = parseInt(result.logs[0].args.gameId);
               playerConnected(1);
-              console.log("EVENT GameCreated: ",App.gameId);
+              console.log("EVENT GameCreated: %d",App.gameId);
               //Wait for the second player to join
               App.playerJoinedWatcher(battleshipInstance);
             }
@@ -514,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else if(result.logs[0].event === "PlayerJoined"){
               //Save gameId
               App.gameId = parseInt(result.logs[0].args.gameId);
-              console.log("EVENT PlayerJoined: ",App.gameId);
+              console.log("EVENT PlayerJoined: %d",App.gameId);
               playerConnected(1);
               playerConnected(2);
               playerNum = 2;
@@ -550,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
           
             document.getElementById("gameIdDisplay").textContent = result.logs[0].args.gameId;
             App.gameId = parseInt(result.logs[0].args.gameId);
-            console.log("EVENT player2 joined: ",App.gameId);
+            console.log("EVENT player2 joined: %d",App.gameId);
             playerConnected(1);
             playerConnected(2);
             playerNum = 2;
@@ -578,10 +578,11 @@ document.addEventListener('DOMContentLoaded', () => {
             App.gameId = parseInt(result.logs[0].args.gameId);
             document.getElementById("gameIdDisplay").textContent = App.gameId;
             playerConnected(1);
-            console.log("EVENT GameCreated: ",App.gameId);
+            console.log("EVENT GameCreated: %d",App.gameId);
   
             //Wait for another player to join the game
             App.playerJoinedWatcher(battleshipInstance);
+            
           }).catch(e => {
           console.error(e.message);
         })}
@@ -589,69 +590,84 @@ document.addEventListener('DOMContentLoaded', () => {
     },
   
     //Watch for the event PlayerJoined
-    playerJoinedWatcher: function (instance){
-      instance.PlayerJoined().watch((error,result)=>{
-          if(error)
-            console.log(error);
-          else{
-            const gameID = parseInt(result.args.gameId);
-            //Check if player was waiting for an opponent and if event corresponds to App.gameID
-            if(App.gameId == gameID && getGameState() == GameStates.Waiting){
-              console.log("EVENT PlayerJoined: ",gameID);
+    playerJoinedWatcher: function(instance) {
+      instance.PlayerJoined().watch(async (error, result) => {
+        if (error) {
+          console.log(error);
+        } else {
+          const gameID = parseInt(result.args.gameId);
+          if (App.gameId != gameID) return;
+          try{
+            const state = await App.getGameState();
+            if (state == GameStates.Connected) {
+              console.log("EVENT PlayerJoined:", gameID);
               playerConnected(2);
-              //Watch for the opponent's board commitment
-              playerReadyWatcher(instance);
+              // Watch for the opponent's board commitment
+              App.playerReadyWatcher(instance);
             }
-          }
-        });
-    }, 
+          }catch(e){
+            console.error(e)}
+        }
+      });
+    },
 
     //Watch for the event playerReady (board committed)
     playerReadyWatcher: function (instance){
-      instance.PlayerReady().watch((error,result)=>{
+      instance.PlayerReady().watch(async (error,result)=>{
           if(error)
             console.log(error);
           else{
-            const gameID = parseInt(result.args.gameId);
-            //Check if event refers to the user's game
-            if(App.gameId != gameID) return;
-            state = getGameState();
+            if(parseInt(result.args.gameId) != App.gameId) return;
+            const state = await App.getGameState();
 
             //Case in which one player has not yet commited its board
             if( state == GameStates.Ready){
-              console.log("EVENT PlayerReady: ",gameID,result.args.player);
-              playerConnected(playerNum == 1 ? 2:1);
+              console.log("EVENT PlayerReady: %d %s",App.gameId,result.args.player);
+              if(result.args.player != App.account)
+                playerReady(playerNum == 2? 1:2);
+              else
+                playerReady(playerNum);
             }
             //Both players have commited their boards
             else if(state == GameStates.Play){
+              console.log("EVENT PlayerReady: %d %s",App.gameId,result.args.player);
               //Display msg based on whose turn it is
-              if(getCurrentTurn() === App.account)
+              const currentTurn = await App.getCurrentTurn();
+              if(currentTurn === App.account)
                 turnDisplay.innerHTML = 'Your Go';
               else
-              turnDisplay.innerHTML = "Enemy's Go";
+                turnDisplay.innerHTML = "Enemy's Go";
+
+              if(result.args.player != App.account)
+                playerReady(playerNum == 2? 1:2);
+              else
+                playerReady(playerNum);
 
               //Set event listeners for shooting enemy ships
               computerSquares.forEach(square => {
-                square.addEventListener('click', () =>{
+                square.addEventListener('click', async () =>{
                   //Check if it's player turn
-                  if(getCurrentTurn() === App.account && getGameState() == GameStates.Play) {
-                    App.fire(square.dataset.id)
+                  const currentTurn = await App.getCurrentTurn();
+                  const state = await App.getGameState();
+                  if(currentTurn == App.account && state == GameStates.Play) {
+                    App.fire(parseInt(square.dataset.id));
                   }
                 })
               });
+              App.fireEventWatcher(instance);
             }
           }
         });
     }, 
 
     //Player is ready to commit its board
-    ready: function(){
+    ready: async function(){
       //Check if all ships are placed
       if(!allShipsPlaced){
         infoDisplay.innerHTML = "Please place all ships"
         return;
       }
-      state = getGameState();
+      const state = await App.getGameState();
       //Check if player has an opponent
       if(state == GameStates.Waiting){
         infoDisplay.innerHTML = "Please wait for the other player"
@@ -667,41 +683,18 @@ document.addEventListener('DOMContentLoaded', () => {
         infoDisplay.innerHTML = "Board commitment not possible in this phase";
         return;
       }
-      //Hide unnecessary buttons
-      setupButtons.style.display = 'none';
-
-      //build merkle tree
-      App.buildTree();
-      playerReady(playerNum);
 
       //Send merkle root to smart contract
       App.contracts.Battleship.deployed().then(function(instance) {
         battleshipInstance = instance;
-        return battleshipInstance.commitBoard(App.gameId, App.merkleTree.getRoot(),{ from: App.account });
-      }).then(function(result) {
+        //build merkle tree
+        App.buildTree();
+        const root = App.merkleTree.getRoot();
+        return battleshipInstance.commitBoard(App.gameId, root,{ from: App.account });
+      }).then(function() {
 
-          console.log("EVENT PlayerReady: ",parseInt(result.logs[0].args.gameId),result.logs[0].args.player);
+          setupButtons.style.display = 'none';
 
-          state = getGameState();
-
-          //Case in which the opponent has already commited their board
-          if(state == GameStates.Play){
-
-            if(getCurrentTurn() === App.account)
-                turnDisplay.innerHTML = 'Your Go';
-              else
-              turnDisplay.innerHTML = "Enemy's Go";
-
-            //Enable shooting
-            computerSquares.forEach(square => {
-              square.addEventListener('click', () =>{
-                //Check if its player turn and game is not yet over
-                if(getCurrentTurn() === App.account && getGameState() == GameStates.Play) {
-                  App.fire(square.dataset.id)
-                }
-              })
-            });
-          }
         }).catch(e => {
         console.error(e.message);
       });
@@ -721,65 +714,101 @@ document.addEventListener('DOMContentLoaded', () => {
     },
 
     getCurrentTurn: function(){
+      return new Promise((resolve, reject) => {
         App.contracts.Battleship.deployed().then(function(instance) {
           battleshipInstance = instance;
-          return battleshipInstance.currentTurn(App.gameId,{ from: App.account });
-        }).then(function(result) {
-            return result;
-          }).catch(e => {
+          return battleshipInstance.currentTurn.call(App.gameId, { from: App.account });
+        }).then((result) => {
+          resolve(result); // Resolve the promise with the result
+        }).catch(e => {
           console.error(e.message);
-        })
+          reject(e); // Reject the promise with the error
+        });
+      });
     },
 
-    getGameState: function(){
+    getGameState: function() {
+      return new Promise((resolve, reject) => {
+        App.contracts.Battleship.deployed().then(function(instance) {
+          battleshipInstance = instance;
+          return battleshipInstance.gameState.call(App.gameId, { from: App.account });
+        }).then((result) => {
+          resolve(parseInt(result)); // Resolve the promise with the result
+        }).catch(e => {
+          console.error(e.message);
+          reject(e); // Reject the promise with the error
+        });
+      });
+    },
+
+    //Send fire to enemy
+    fire : function(square){
       App.contracts.Battleship.deployed().then(function(instance) {
         battleshipInstance = instance;
-        return battleshipInstance.gameState(App.gameId,{ from: App.account });
+        return battleshipInstance.fire(App.gameId,square,{ from: App.account });
       }).then(function(result) {
-          return result;
-        }).catch(e => {
-        console.error(e.message);
-      })
-  },
-
-  fire : function(square){
-    App.contracts.Battleship.deployed().then(function(instance) {
-      battleshipInstance = instance;
-      return battleshipInstance.fire(gameId,square,{ from: App.account });
-    }).then(function(result) {
-        //wait for the result
-        App.shotResult(instance,square);
-      }
-      ).catch(e => {
-      console.error(e.message);
-    });
-  },
-
-  shotResult : function(instance,square){
-    instance.ShotResult().watch((error,result)=>{
-      if(error)
-        console.log(error);
-      else{
-        const gameID = result.args.gameId;
-        const current_turn = getCurrentTurn();
-        //Check if event refers to the user's game and the selected coordinate is correct and it's user turn
-        if(App.gameId != gameID && square != result.args.coordinate &&  current_turn != App.account) return;
-
-        console.log("EVENT ShotResult: ",gameID,result.args.coordinate);
-        
-        const enemySquare = computerGrid.querySelector(`div[data-id='${shotFired}']`)
-        if (result.args.result == true) {
-          enemySquare.classList.add('boom')
-        } else {
-          enemySquare.classList.add('miss')
+          //wait for the result
+          App.getShotResult(instance,square);
         }
-        //TO BE IMPLEMENTED
-        //checkForWins()
+        ).catch(e => {
+        console.error(e.message);
+      });
+    },
 
-        turnDisplay.innerHTML = "Enemy's Go";
-      }
-    })
-  },
+    //Get the shot result from previous fire
+    getShotResult : function(instance,square){
+      instance.ShotResult().watch((error,result)=>{
+        if(error)
+          console.log(error);
+        else{
+          if(result.args.coordinate != square) return;
+          if(parseInt(result.args.gameId) != App.gameId) return;
+          if(result.args.attacker != App.account) return;
+          console.log("EVENT ShotResult: %d %d",App.gameId,result.args.coordinate);
+          
+          const enemySquare = computerGrid.querySelector(`div[data-id='${square}']`)
+          if (result.args.result == true) {
+            enemySquare.classList.add('boom')
+          } else {
+            enemySquare.classList.add('miss')
+          }
+
+          turnDisplay.innerHTML = "Enemy's Go";
+        }
+      })
+    },
+
+    //Watch for fire sent from enemy and sent proof
+    fireEventWatcher : function(instance){
+      instance.Fire().watch((error,result)=>{
+        if(error)
+          console.log(error);
+        else{
+          //Check if event corresponds to my game
+          if(parseInt(result.args.gameId) != App.gameId) return;
+          //if I am the victim
+          if(result.args.victim != App.account) return;
+
+          const coordinate = result.args.coordinate;
+          console.log("EVENT Fire: %d %d %s",App.gameId,coordinate, App.account);
+          
+          //Store the result of the enemy's shot
+          const hit = userSquares[coordinate].classList.contains('taken');
+          //Build merkle proof
+          const proof = App.merkleTree.getProof(coordinate);
+          return instance.ShotResult(gameId,coordinate,hit, proof["salt"], proof["proof"],{ from: App.account })
+          .then(function(result) {
+              //Check if the verification was successful
+              if(result.logs[0].event === "ShotResult"){
+                userSquares[coordinate].classList.add(hit ? 'boom' : 'miss');
+              }
+            }
+            ).catch(e => {
+            console.error(e.message);
+          });
+        }
+      })
+    }
 
   };
 

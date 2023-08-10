@@ -7,8 +7,9 @@
     "test": "test"
   },
   "scripts": {
-    "dev": "lite-server",
+    "dev": "npm run pack && lite-server",
     "build": "webpack --mode production",
+    "pack" : "npx webpack --config src/js/webpack.config.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",

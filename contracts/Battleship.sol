@@ -9,6 +9,11 @@ contract Battleship {
     Play,
     Over
   }
+  
+  struct Shot{
+    bool result;
+    bool verified;
+  }
 
   struct Game {
     address player1;
@@ -18,18 +23,21 @@ contract Battleship {
     mapping(address => bytes32) merkleRoots;
     address current_turn;
     mapping(address => uint8) scores;
-    mapping(address => mapping(uint8 => bool)) shots;
+    uint8 winning_score;
+    mapping(address => mapping(uint8 => Shot)) shots;
     bool waiting_result;
   }
 
   mapping(uint256 => Game) public games;
   uint256 public totalGames;
 
-  event GameCreated(uint256 indexed gameId, address indexed player1);
-  event PlayerJoined(uint256 indexed gameId, address indexed player2);
+  event GameCreated(uint256 indexed gameId, address player1);
+  event PlayerJoined(uint256 indexed gameId, address player2);
   event PlayerReady(uint256 indexed gameId, address player);
-  event Fire(uint256 indexed gameId, address player, uint8 indexed coordinate);
-  event ShotResult(uint256 indexed gameId, uint8 coordinate, bool result);
+  event Fire(uint256 indexed gameId, address indexed  victim, uint8 coordinate);
+  event ShotResult(uint256 indexed gameId, address indexed attacker, uint8 indexed coordinate, bool result);
+  event CheatingDetected(uint256 indexed gameId, address indexed cheater);
+  event Winner(uint256 indexed gameId, address indexed winner);
 
   function createGame(bool priv) private{
     uint256 gameId = totalGames++;
@@ -38,8 +46,7 @@ contract Battleship {
     newGame.gameState = States.Waiting;
     newGame.is_private = priv;
     newGame.current_turn = msg.sender;
-    newGame.scores[msg.sender] = 0;
-    newGame.merkleRoots[msg.sender] = 0;
+    newGame.winning_score = 17;
     emit GameCreated(gameId, msg.sender);
   }
 
@@ -56,8 +63,6 @@ contract Battleship {
 
     existingGame.player2 = msg.sender;
     existingGame.gameState = States.Connected;
-    existingGame.merkleRoots[msg.sender] = 0;
-    existingGame.scores[msg.sender] = 0;
     emit PlayerJoined(gameId, msg.sender);
   }
 
@@ -68,7 +73,7 @@ contract Battleship {
 
     for(uint256 i = 0; i < totalGames; i++) {
       Game storage existingGame = games[i];
-      if (existingGame.player2 == address(0) && existingGame.gameState == States.Waiting) {
+      if (existingGame.player2 == address(0) && existingGame.gameState == States.Waiting && !existingGame.is_private) {
         gameFound = true;
         gameId = i;
         break;
@@ -78,8 +83,6 @@ contract Battleship {
     if (gameFound) {
       Game storage existingGame = games[gameId];
       existingGame.player2 = msg.sender;
-      existingGame.scores[msg.sender] = 0;
-      existingGame.merkleRoots[msg.sender] = 0;
       existingGame.gameState = States.Connected;
       emit PlayerJoined(gameId, msg.sender);
     } else {
@@ -133,7 +136,7 @@ contract Battleship {
     return games[gameId].current_turn;
   }
 
-  function gameState(uint256 gameId) public view returns (uint8){
+  function gameState(uint256 gameId) external view returns (uint8){
     require(gameId < totalGames, "Invalid game ID");
     if(games[gameId].gameState == States.Waiting)
       return 0;
@@ -155,13 +158,14 @@ contract Battleship {
     require(game.current_turn == msg.sender,"Player must wait for their turn");
     require(coordinate >= 0 && coordinate < 100, "Invalid coordinate");
     require(!game.waiting_result, "Waiting for the result of previous shots");
+    require(!game.shots[msg.sender][coordinate].verified, "Player already fired to this coordinate");
 
     game.waiting_result = true;
     
     emit Fire(gameId,msg.sender,coordinate);
   }
 
-  function shotResult(uint256 gameId, uint8 coordinate, bool result, bytes2 salt, bytes32[] memory proof) external {
+  function shotResult(uint256 gameId, uint8 coordinate, bool result, bytes2 salt, bytes32[] calldata proof) external {
     require(gameId < totalGames, "Invalid game ID");
     Game storage game = games[gameId];
     require(game.current_turn != msg.sender, "Not player turn");
@@ -172,14 +176,28 @@ contract Battleship {
 
     address attacker = game.current_turn;
 
-    if(verify(game.merkleRoots[msg.sender], result, salt, proof)){
-      game.shots[attacker][coordinate] = result;
-      game.scores[attacker]++;
-      emit ShotResult(gameId,coordinate,result);
-    }
-    //else
-    //IMPLEMENT VERIFICATION FAILED
-      
+    require(!game.shots[attacker][coordinate].verified, "Proof for this coordinate already provided");
 
+    if(verify(game.merkleRoots[msg.sender], result, salt, proof)){
+      game.shots[attacker][coordinate].result = result;
+       game.shots[attacker][coordinate].verified = true;
+      if(result)
+        game.scores[attacker]++;
+        
+      game.current_turn = msg.sender;
+      emit ShotResult(gameId,attacker,coordinate,result);
+      checkForWin(gameId, game, attacker);
+    }
+    else{
+      emit CheatingDetected(gameId, msg.sender);
+    }
+    game.waiting_result = false;
+  }
+
+  function checkForWin(uint256 gameId, Game storage game,address winner) private {
+    if(game.scores[winner] == game.winning_score){
+      emit Winner(gameId,winner);
+      game.gameState = States.Over;
+    }
   }
 }
