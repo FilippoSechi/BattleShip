@@ -643,6 +643,8 @@ document.addEventListener('DOMContentLoaded', () => {
               else
                 playerReady(playerNum);
 
+              App.fireEventWatcher(instance);
+
               //Set event listeners for shooting enemy ships
               computerSquares.forEach(square => {
                 square.addEventListener('click', async () =>{
@@ -650,11 +652,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   const currentTurn = await App.getCurrentTurn();
                   const state = await App.getGameState();
                   if(currentTurn == App.account && state == GameStates.Play) {
-                    App.fire(parseInt(square.dataset.id));
+                    App.fire(instance,parseInt(square.dataset.id));
                   }
                 })
               });
-              App.fireEventWatcher(instance);
             }
           }
         });
@@ -742,74 +743,81 @@ document.addEventListener('DOMContentLoaded', () => {
     },
 
     //Send fire to enemy
-    fire : function(square){
-      App.contracts.Battleship.deployed().then(function(instance) {
-        battleshipInstance = instance;
-        return battleshipInstance.fire(App.gameId,square,{ from: App.account });
-      }).then(function(result) {
-          //wait for the result
-          App.getShotResult(instance,square);
-        }
-        ).catch(e => {
-        console.error(e.message);
-      });
-    },
-
-    //Get the shot result from previous fire
-    getShotResult : function(instance,square){
-      instance.ShotResult().watch((error,result)=>{
-        if(error)
-          console.log(error);
-        else{
-          if(result.args.coordinate != square) return;
-          if(parseInt(result.args.gameId) != App.gameId) return;
-          if(result.args.attacker != App.account) return;
-          console.log("EVENT ShotResult: %d %d",App.gameId,result.args.coordinate);
-          
-          const enemySquare = computerGrid.querySelector(`div[data-id='${square}']`)
-          if (result.args.result == true) {
-            enemySquare.classList.add('boom')
-          } else {
-            enemySquare.classList.add('miss')
+    fire: function(instance, square) {
+      instance.fire(App.gameId, square, { from: App.account }).then(async () =>{
+          console.log("1");
+          try{
+            await App.getShotResult(instance, square);
+            console.log("4");
+          } catch (e) {
+              console.error(e.message);
           }
-
-          turnDisplay.innerHTML = "Enemy's Go";
-        }
-      })
+        }).catch((e)=> console.error(e))
     },
+  
+  getShotResult: async function(instance, square, fireResult) {
+      return new Promise((resolve, reject) => {
+        instance.ShotResult().watch(async (error, result) => {
+            if (error) {
+                console.log(error);
+                reject(error);
+            } else {
+              console.log("2");
+              if ( parseInt(result.args.coordinate) != square || parseInt(result.args.gameId) != App.gameId || result.args.attacker != App.account) 
+                  return;
+              console.log("3");
+              console.log("EVENT ShotResult: %d %d", App.gameId, parseInt(result.args.coordinate));
 
-    //Watch for fire sent from enemy and sent proof
-    fireEventWatcher : function(instance){
-      instance.Fire().watch((error,result)=>{
-        if(error)
-          console.log(error);
-        else{
-          //Check if event corresponds to my game
-          if(parseInt(result.args.gameId) != App.gameId) return;
-          //if I am the victim
-          if(result.args.victim != App.account) return;
+              const enemySquare = computerGrid.querySelector(`div[data-id='${square}']`);
+              if (result.args.result == true) {
+                  enemySquare.classList.add('boom');
+                } else {
+                    enemySquare.classList.add('miss');
+                }
 
-          const coordinate = result.args.coordinate;
-          console.log("EVENT Fire: %d %d %s",App.gameId,coordinate, App.account);
-          
-          //Store the result of the enemy's shot
-          const hit = userSquares[coordinate].classList.contains('taken');
-          //Build merkle proof
-          const proof = App.merkleTree.getProof(coordinate);
-          return instance.ShotResult(gameId,coordinate,hit, proof["salt"], proof["proof"],{ from: App.account })
-          .then(function(result) {
-              //Check if the verification was successful
-              if(result.logs[0].event === "ShotResult"){
-                userSquares[coordinate].classList.add(hit ? 'boom' : 'miss');
-              }
+                turnDisplay.innerHTML = "Enemy's Go";
+                resolve();
             }
-            ).catch(e => {
-            console.error(e.message);
           });
-        }
-      })
-    }
+      });
+  },  
 
+  fireEventWatcher: function(instance) {
+    instance.Fire().watch(async (error, result) => {
+        if (error) {
+          console.log(error);
+        } else {
+            try {
+              // Check if event corresponds to my game
+              console.log("5");
+              if (parseInt(result.args.gameId) != App.gameId) return;
+              // if I am the victim
+              if (result.args.victim != App.account) return;
+
+              const coordinate = parseInt(result.args.coordinate);
+              console.log("EVENT Fire: %d %d %s", App.gameId, coordinate, App.account);
+
+              // Store the result of the enemy's shot
+              const hit = userSquares[coordinate].classList.contains('taken');
+              // Build merkle proof
+              const proof = App.merkleTree.getProof(coordinate);
+
+              instance.shotResult(App.gameId, coordinate, hit, proof["salt"], proof["proof"], { from: App.account })
+              .then(function(shotresult){
+                console.log("6");
+                // Check if the verification was successful
+                if (shotresult.logs[0].event === "ShotResult") {
+                    userSquares[coordinate].classList.add(hit ? 'boom' : 'miss');
+              }
+              }).catch((e)=> console.log(e))
+
+              
+            } catch (e) {
+                console.error(e.message);
+            }
+        }
+    });
+  }
   };
 
   $(function() {

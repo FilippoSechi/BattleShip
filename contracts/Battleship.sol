@@ -90,26 +90,6 @@ contract Battleship {
     }
   }
 
-  function verify(bytes32 root, bool result, bytes2 salt, bytes32[] memory proof) private pure returns (bool){
-    
-    bytes32 computedHash = keccak256(abi.encodePacked(result, salt));
-
-    for (uint256 i = 0; i < proof.length; i++) {
-      bytes32 proofElement = proof[i];
-
-      if (computedHash <= proofElement) {
-        // Hash(current computed hash + current element of the proof)
-        computedHash = keccak256(abi.encodePacked(computedHash, proofElement));
-      } else {
-        // Hash(current element of the proof + current computed hash)
-        computedHash = keccak256(abi.encodePacked(proofElement, computedHash));
-      }
-    }
-
-    // Check if the computed hash (root) is equal to the provided root
-    return computedHash == root;
-  }
-
   function commitBoard(uint256 gameId, bytes32 root) external {
     require(gameId < totalGames, "Invalid game ID");
     Game storage game = games[gameId];
@@ -161,8 +141,13 @@ contract Battleship {
     require(!game.shots[msg.sender][coordinate].verified, "Player already fired to this coordinate");
 
     game.waiting_result = true;
+    address victim;
+    if(game.current_turn == game.player1)
+      victim = game.player2;
+    else 
+      victim = game.player1;
     
-    emit Fire(gameId,msg.sender,coordinate);
+    emit Fire(gameId,victim,coordinate);
   }
 
   function shotResult(uint256 gameId, uint8 coordinate, bool result, bytes2 salt, bytes32[] calldata proof) external {
@@ -194,6 +179,26 @@ contract Battleship {
     game.waiting_result = false;
   }
 
+function verify(bytes32 root, bool result, bytes2 salt, bytes32[] memory proof) private pure returns (bool){
+    
+    bytes32 computedHash = keccak256(abi.encodePacked(result, salt));
+
+    for (uint256 i = 0; i < proof.length; i++) {
+      bytes32 proofElement = proof[i];
+
+      if (computedHash <= proofElement) {
+        // Hash(current computed hash + current element of the proof)
+        computedHash = keccak256(abi.encodePacked(computedHash, proofElement));
+      } else {
+        // Hash(current element of the proof + current computed hash)
+        computedHash = keccak256(abi.encodePacked(proofElement, computedHash));
+      }
+    }
+
+    // Check if the computed hash (root) is equal to the provided root
+    return computedHash == root;
+  }
+  
   function checkForWin(uint256 gameId, Game storage game,address winner) private {
     if(game.scores[winner] == game.winning_score){
       emit Winner(gameId,winner);

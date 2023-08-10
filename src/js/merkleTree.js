@@ -3,15 +3,16 @@
 
 const { MerkleTree } = require("merkletreejs");
 const keccak256 = require('keccak256');
+//const crypto = require('crypto')
 const Buffer = require('buffer').Buffer;
 
 class Tree {
   constructor(transactions) {
     this.transactions = transactions;
-    this.salts = transactions.map(() => crypto.getRandomValues(Buffer.alloc(2)));
+    this.salts = transactions.map(() => crypto.getRandomValues(Buffer.alloc(2)).toString('hex'));
 
     const leaves = transactions.map((transaction, index) => keccak256(transaction + this.salts[index]));
-    this.tree = new MerkleTree(leaves, keccak256);
+    this.tree = new MerkleTree(leaves, keccak256,{ sort: true });
   }
 
   getRoot() {
