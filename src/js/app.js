@@ -82,38 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return secondLevelChildren;
     }
   const expectedNumShip = tot_ships();
-  /*startMultiPlayer()
-
-    // On Timeout
-    socket.on('timeout', () => {
-      infoDisplay.innerHTML = 'You have reached the 10 minute limit'
-    })
-
-    // Setup event listeners for firing
-    computerSquares.forEach(square => {
-      square.addEventListener('click', () => {
-        if(currentPlayer === 'user' && ready && enemyReady) {
-          shotFired = square.dataset.id
-          socket.emit('fire', shotFired)
-        }
-      })
-    })
-
-    // On Fire Received
-    socket.on('fire', id => {
-      enemyGo(id)
-      const square = userSquares[id]
-      socket.emit('fire-reply', square.classList)
-      playGameMulti(socket)
-    })
-
-    // On Fire Reply Received
-    socket.on('fire-reply', classList => {
-      revealSquare(classList)
-      playGameMulti(socket)
-    })
-  }
-*/
   
   //Create Board
   function createBoard(grid, squares) {
@@ -304,26 +272,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function dragEnd() {
     // console.log('dragend')
   }
-
-  /* Game Logic for MultiPlayer
-  function playGameMulti(socket) {
-    setupButtons.style.display = 'none'
-    if(isGameOver) return
-    if(!ready) {
-      socket.emit('player-ready')
-      ready = true
-      playerReady(playerNum)
-    }
-
-    if(enemyReady) {
-      if(currentPlayer === 'user') {
-        turnDisplay.innerHTML = 'Your Go'
-      }
-      if(currentPlayer === 'enemy') {
-        turnDisplay.innerHTML = "Enemy's Go"
-      }
-    }
-  }*/
 
   //Highlights player status bar (READY)
   function playerReady(num) {
@@ -746,42 +694,39 @@ document.addEventListener('DOMContentLoaded', () => {
     //Send fire to enemy
     fire: function(instance, square) {
       instance.fire(App.gameId, square, { from: App.account }).then(async () =>{
-          console.log("1");
           try{
+            //Wait for the result of the shot to be emitted from the opponent
             await App.getShotResult(instance, square);
-            console.log("4");
           } catch (e) {
               console.error(e.message);
           }
         }).catch((e)=> console.error(e))
     },
   
-  getShotResult: async function(instance, square, fireResult) {
-      return new Promise((resolve, reject) => {
-        instance.ShotResult().watch(async (error, result) => {
-            if (error) {
-                console.log(error);
-                reject(error);
-            } else {
-              console.log("2");
-              if ( parseInt(result.args.coordinate) != square || parseInt(result.args.gameId) != App.gameId || result.args.attacker != App.account) 
-                  return;
-              console.log("3");
-              console.log("EVENT ShotResult: %d %d", App.gameId, parseInt(result.args.coordinate));
+    getShotResult: async function(instance, square, fireResult) {
+        return new Promise((resolve, reject) => {
+          instance.ShotResult().watch(async (error, result) => {
+              if (error) {
+                  console.log(error);
+                  reject(error);
+              } else {
+                if ( parseInt(result.args.coordinate) != square || parseInt(result.args.gameId) != App.gameId || result.args.attacker != App.account) 
+                    return;
+                console.log("EVENT ShotResult: %d %d", App.gameId, parseInt(result.args.coordinate));
 
-              const enemySquare = computerGrid.querySelector(`div[data-id='${square}']`);
-              if (result.args.result == true) {
-                  enemySquare.classList.add('boom');
-                } else {
-                    enemySquare.classList.add('miss');
-                }
+                const enemySquare = computerGrid.querySelector(`div[data-id='${square}']`);
+                if (result.args.result == true) {
+                    enemySquare.classList.add('boom');
+                  } else {
+                      enemySquare.classList.add('miss');
+                  }
 
-                turnDisplay.innerHTML = "Enemy's Go";
-                resolve();
-            }
-          });
-      });
-  },  
+                  turnDisplay.innerHTML = "Enemy's Go";
+                  resolve();
+              }
+            });
+        });
+    },  
 
   fireEventWatcher: function(instance) {
     instance.Fire().watch(async (error, result) => {
@@ -790,7 +735,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             try {
               // Check if event corresponds to my game
-              console.log("5");
               if (parseInt(result.args.gameId) != App.gameId) return;
               // if I am the victim
               if (result.args.victim != App.account) return;
@@ -802,13 +746,16 @@ document.addEventListener('DOMContentLoaded', () => {
               const hit = userSquares[coordinate].classList.contains('taken');
               // Build merkle proof
               const proof = App.merkleTree.getProof(coordinate);
-
+              //Send proof to smart contract
               instance.shotResult(App.gameId, coordinate, hit, proof["salt"], proof["proof"], { from: App.account })
               .then(function(shotresult){
-                console.log("6");
                 // Check if the verification was successful
                 if (shotresult.logs[0].event === "ShotResult") {
                     userSquares[coordinate].classList.add(hit ? 'boom' : 'miss');
+                /////////////////////////////////////
+                // TODO: Implement cheating detection
+                ///////////////////////////////////
+                turnDisplay.innerHTML = "Your go";
               }
               }).catch((e)=> console.log(e))
 
@@ -828,3 +775,5 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 })
+
+//TODO: IMPLEMENT WINNING / GAMEOVER / BOARD VERIFICATION
