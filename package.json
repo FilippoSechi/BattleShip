@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm run pack && lite-server",
     "build": "webpack --mode production",
-    "pack" : "npx webpack --config src/js/webpack.config.js",
+    "pack": "npx webpack --config src/js/webpack.config.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -23,8 +23,12 @@
     "buffer": "^6.0.3",
     "buffer-polyfill": "^6.0.3",
     "crypto": "^1.0.1",
+    "ethjs": "^0.4.0",
+    "ethjs-abi": "^0.2.1",
     "keccak256": "^1.0.6",
     "merkletreejs": "^0.3.10",
-    "securerandom": "^0.0.2"
+    "securerandom": "^0.0.2",
+    "web3": "^4.0.3",
+    "web3-eth-abi": "^4.0.3"
   }
 }

@@ -150,7 +150,7 @@ contract Battleship {
     emit Fire(gameId,victim,coordinate);
   }
 
-  function shotResult(uint256 gameId, uint8 coordinate, bool result, bytes2 salt, bytes32[] calldata proof) external {
+  function shotResult(uint256 gameId, uint8 coordinate, bool result, uint16 salt, bytes32[] calldata proof) external {
     require(gameId < totalGames, "Invalid game ID");
     Game storage game = games[gameId];
     require(game.current_turn != msg.sender, "Not player turn");
@@ -179,9 +179,9 @@ contract Battleship {
     game.waiting_result = false;
   }
 
-function verify(bytes32 root, bool result, bytes2 salt, bytes32[] memory proof) private pure returns (bool){
+function verify(bytes32 root, bool result, uint16 salt, bytes32[] memory proof) private pure returns (bool){
     
-    bytes32 computedHash = keccak256(abi.encodePacked(result, salt));
+    bytes32 computedHash = keccak256(abi.encode(result, salt));
 
     for (uint256 i = 0; i < proof.length; i++) {
       bytes32 proofElement = proof[i];

@@ -1,4 +1,5 @@
 const Tree = require("./merkleTree");
+
 const GameStates= {
   Waiting: 0, //Initial state
   Connected: 1, //Two players connected
