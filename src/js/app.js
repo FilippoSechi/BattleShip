@@ -1,11 +1,12 @@
 const Tree = require("./merkleTree");
-
 const GameStates= {
   Waiting: 0, //Initial state
   Connected: 1, //Two players connected
-  Ready : 2,  //One player commited their board
-  Play: 3,  //Both players commited their boards
-  Over: 4   //Game ended
+  Payed: 2, //The second player payed the fee
+  Ready : 3,  //One player commited their board
+  Play: 4,  //Both players commited their boards
+  Over: 5,   //Game ended
+  Rewarded : 6  //The winner got their prize
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -402,6 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
     gameId: 0,
     account: '',
     merkleTree: null,
+    price: 0,
   
     init: async function() {
       return await App.initWeb3();
@@ -439,6 +441,15 @@ document.addEventListener('DOMContentLoaded', () => {
     },
   
     joinRandomGame: function() {
+      let input = document.getElementById("gamePrice").value;
+    
+      // Check if the input contains only numeric characters
+      if (!/^\d+$/.test(input)) {
+        alert("Invalid price. Please enter only numeric characters.");
+        return;
+      }
+  
+      App.price = parseInt(input, 10);
       web3.eth.getAccounts(function(error, accounts) {
         if (error) {
           console.log(error);
@@ -446,7 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
         App.account = accounts[0];
         App.contracts.Battleship.deployed().then(function(instance) {
           battleshipInstance = instance;
-          return battleshipInstance.joinRandomGame({ from: App.account });
+          return battleshipInstance.joinRandomGame(App.price,{ from: App.account });
         }).then(function(result) {
           
             //Player created a new game
@@ -467,6 +478,10 @@ document.addEventListener('DOMContentLoaded', () => {
               playerConnected(1);
               playerConnected(2);
               playerNum = 2;
+              
+              document.getElementById("pay").style.display='inline';
+              $(document).on('click', '#pay', App.pay);
+              App.PayedEventWatcher(battleshipInstance);
               //Watch for opponent board commitment
               App.playerReadyWatcher(battleshipInstance);
             }
@@ -497,12 +512,18 @@ document.addEventListener('DOMContentLoaded', () => {
           return battleshipInstance.joinGame(gameId,{ from: App.account });
         }).then(function(result) {
           
-            document.getElementById("gameIdDisplay").textContent = result.logs[0].args.gameId;
-            App.gameId = parseInt(result.logs[0].args.gameId);
+            App.price = parseInt(result.logs[0].args.price);
+            document.getElementById("gamePrice").value = App.price;
+            document.getElementById("gameIdDisplay").textContent =gameId;
+            App.gameId = gameId;
             console.log("EVENT player2 joined: %d",App.gameId);
             playerConnected(1);
             playerConnected(2);
             playerNum = 2;
+
+            document.getElementById("pay").style.display='inline';
+            $(document).on('click', '#pay', App.pay);
+            App.PayedEventWatcher(battleshipInstance);
             //Watch for opponent board commitment
             App.playerReadyWatcher(battleshipInstance);
           }
@@ -513,6 +534,15 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     
     createPrivateGame: function() {
+      let input = document.getElementById("gamePrice").value;
+    
+      // Check if the input contains only numeric characters
+      if (!/^\d+$/.test(input)) {
+        alert("Invalid price. Please enter only numeric characters.");
+        return;
+      }
+  
+      App.price = parseInt(input, 10);
       web3.eth.getAccounts(function(error, accounts) {
         if (error) {
           console.log(error);
@@ -520,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
         App.account = accounts[0];
         App.contracts.Battleship.deployed().then(function(instance) {
           battleshipInstance = instance;
-          return battleshipInstance.createPrivateGame({ from: App.account });
+          return battleshipInstance.createPrivateGame(App.price,{ from: App.account });
         }).then(function(result) {
           // The createPrivateGame function should not return anything,
           // so this block will be executed when the transaction is mined.
@@ -551,6 +581,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state == GameStates.Connected) {
               console.log("EVENT PlayerJoined:", gameID);
               playerConnected(2);
+              document.getElementById("pay").style.display='inline';
+              $(document).on('click', '#pay', App.pay);
+              App.PayedEventWatcher(instance);
               // Watch for the opponent's board commitment
               App.playerReadyWatcher(instance);
             }
@@ -560,6 +593,28 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     },
 
+    //Watch for the event Payed
+    PayedEventWatcher: function (instance){
+      instance.Payed().watch(async (error,result)=>{
+          if(error)
+            console.log(error);
+          else if(App.gameId == parseInt(result.args.gameId) && App.account != result.args.player){
+            console.log("EVENT: PAYED %s", result.args.player);
+          }
+      }
+      );
+    }, 
+
+    pay: function (){
+        App.contracts.Battleship.deployed().then(function(instance){
+          const battleshipInstance = instance;
+          return battleshipInstance.pay(App.gameId, {from: App.account, value: App.price}).then(function(result){
+            console.log("EVENT: PAYED %s",result.logs[0].args.player);
+            document.getElementById("pay").style.display = 'none';
+          })
+        }).catch((e)=> console.error(e));
+    },
+    
     //Watch for the event playerReady (board committed)
     playerReadyWatcher: function (instance){
       instance.PlayerReady().watch(async (error,result)=>{
@@ -623,13 +678,8 @@ document.addEventListener('DOMContentLoaded', () => {
         infoDisplay.innerHTML = "Please wait for the other player"
         return;
       }
-      //Check if player already commited its board
-      if(App.merkleTree != null){
-        infoDisplay.innerHTML = "Board already commited";
-        return;
-      }
 
-      if(state != GameStates.Connected && state != GameStates.Ready){
+      if(state != GameStates.Payed && state != GameStates.Ready){
         infoDisplay.innerHTML = "Board commitment not possible in this phase";
         return;
       }

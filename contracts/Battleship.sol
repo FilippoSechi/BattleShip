@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: MIT 
 pragma solidity >=0.5.0 <0.9.0;
+pragma experimental ABIEncoderV2;
 
 contract Battleship {
   enum States{
     Waiting,
     Connected,
+    Payed,
     Ready,
     Play,
-    Over
+    Over,
+    Rewarded
   }
   
   struct Shot{
@@ -26,20 +29,25 @@ contract Battleship {
     uint8 winning_score;
     mapping(address => mapping(uint8 => Shot)) shots;
     bool waiting_result;
+    address payable winner;
+    uint256 balance;
+    uint256 price;
   }
 
   mapping(uint256 => Game) public games;
   uint256 public totalGames;
 
-  event GameCreated(uint256 indexed gameId, address player1);
-  event PlayerJoined(uint256 indexed gameId, address player2);
+  event GameCreated(uint256 indexed gameId, address player1, uint256 price);
+  event PlayerJoined(uint256 indexed gameId, address player2, uint256 price);
   event PlayerReady(uint256 indexed gameId, address player);
   event Fire(uint256 indexed gameId, address indexed  victim, uint8 coordinate);
   event ShotResult(uint256 indexed gameId, address indexed attacker, uint8 indexed coordinate, bool result);
   event CheatingDetected(uint256 indexed gameId, address indexed cheater);
+  event WaitingForBoardValidation( uint256 indexed gameId, address indexed player);
   event Winner(uint256 indexed gameId, address indexed winner);
+  event Payed(uint256 indexed gameId, address indexed player);
 
-  function createGame(bool priv) private{
+  function createGame(bool priv, uint256 price) private{
     uint256 gameId = totalGames++;
     Game storage newGame = games[gameId];
     newGame.player1 = msg.sender;
@@ -47,14 +55,15 @@ contract Battleship {
     newGame.is_private = priv;
     newGame.current_turn = msg.sender;
     newGame.winning_score = 17;
-    emit GameCreated(gameId, msg.sender);
+    newGame.price = price;
+    emit GameCreated(gameId, msg.sender, price);
   }
 
-  function createPrivateGame() external {
-    createGame(true);
+  function createPrivateGame(uint256 price) external{
+    createGame(true,price);
   }
 
-  function joinGame(uint256 gameId) external {
+  function joinGame(uint256 gameId) external{
     require(gameId < totalGames, "Invalid game ID");
     Game storage existingGame = games[gameId];
 
@@ -63,17 +72,30 @@ contract Battleship {
 
     existingGame.player2 = msg.sender;
     existingGame.gameState = States.Connected;
-    emit PlayerJoined(gameId, msg.sender);
+    emit PlayerJoined(gameId, msg.sender, existingGame.price);
   }
 
+  function pay(uint256 gameId) public payable{
 
-  function joinRandomGame() external {
+    require(gameId < totalGames, "Invalid game ID");
+    Game storage game = games[gameId];
+    require(game.gameState == States.Connected, "Game not full");
+    require(game.price == msg.value, "Please pay the full fee");
+    require(game.player1 == msg.sender || game.player2 == msg.sender, "Player does not participate to this game");
+    game.balance += msg.value;
+    if(game.balance != msg.value)
+      game.gameState = States.Payed;
+    emit Payed(gameId, msg.sender);
+  }
+
+  function joinRandomGame(uint256 price) external{
     uint256 gameId = 0;
     bool gameFound = false;
 
     for(uint256 i = 0; i < totalGames; i++) {
       Game storage existingGame = games[i];
-      if (existingGame.player2 == address(0) && existingGame.gameState == States.Waiting && !existingGame.is_private) {
+      if (existingGame.player2 == address(0) && existingGame.gameState == States.Waiting && 
+          !existingGame.is_private && existingGame.price == price) {
         gameFound = true;
         gameId = i;
         break;
@@ -86,7 +108,7 @@ contract Battleship {
       existingGame.gameState = States.Connected;
       emit PlayerJoined(gameId, msg.sender);
     } else {
-        createGame(false);
+        createGame(false,price);
     }
   }
 
@@ -95,14 +117,14 @@ contract Battleship {
     Game storage game = games[gameId];
 
     require(game.player1 != address(0), "Game does not exist");
-    require(game.gameState == States.Ready || game.gameState == States.Connected, "Game already started");
+    require(game.gameState == States.Ready || game.gameState == States.Payed, "Game already started");
     require(game.player1 == msg.sender || game.player2 == msg.sender, "Player does not participate to this game");
     require(game.merkleRoots[msg.sender] == 0, "Player already commited their board for this game");
 
     game.merkleRoots[msg.sender] = root;
 
     //Waiting for the commit of the other player
-    if(game.gameState == States.Connected)
+    if(game.gameState == States.Payed)
       game.gameState = States.Ready;
     //Other player already commited their board
     else if(game.gameState == States.Ready)
@@ -122,12 +144,15 @@ contract Battleship {
       return 0;
     if(games[gameId].gameState == States.Connected)
       return 1;
-    if(games[gameId].gameState == States.Ready)
+    if(games[gameId].gameState == States.Payed)
       return 2;
-    if(games[gameId].gameState == States.Play)
+    if(games[gameId].gameState == States.Ready)
       return 3;
-
-    return 4;
+    if(games[gameId].gameState == States.Play)
+      return 4;
+    if(games[gameId].gameState == States.Over)
+      return 5;
+    return 6;
   }
 
   function fire(uint256 gameId, uint8 coordinate) external{
@@ -150,7 +175,7 @@ contract Battleship {
     emit Fire(gameId,victim,coordinate);
   }
 
-  function shotResult(uint256 gameId, uint8 coordinate, bool result, uint16 salt, bytes32[] calldata proof) external {
+  function shotResult(uint256 gameId, uint8 coordinate, bool result, uint32 salt, bytes32[] calldata proof) external {
     require(gameId < totalGames, "Invalid game ID");
     Game storage game = games[gameId];
     require(game.current_turn != msg.sender, "Not player turn");
@@ -171,15 +196,17 @@ contract Battleship {
         
       game.current_turn = msg.sender;
       emit ShotResult(gameId,attacker,coordinate,result);
-      checkForWin(gameId, game, attacker);
+      checkForWin(gameId, attacker);
     }
     else{
       emit CheatingDetected(gameId, msg.sender);
+      game.gameState = States.Over;
+      declareWinner(gameId, attacker);
     }
     game.waiting_result = false;
   }
 
-function verify(bytes32 root, bool result, uint16 salt, bytes32[] memory proof) private pure returns (bool){
+function verify(bytes32 root, bool result, uint32 salt, bytes32[] memory proof) private pure returns (bool){
     
     bytes32 computedHash = keccak256(abi.encode(result, salt));
 
@@ -197,12 +224,55 @@ function verify(bytes32 root, bool result, uint16 salt, bytes32[] memory proof) 
 
     // Check if the computed hash (root) is equal to the provided root
     return computedHash == root;
+
   }
   
-  function checkForWin(uint256 gameId, Game storage game,address winner) private {
-    if(game.scores[winner] == game.winning_score){
-      emit Winner(gameId,winner);
+  function checkBoardValidity(uint256 gameId, bool [] memory result, uint32 [] memory salt, bytes32[][] memory proof) public{
+
+    require(gameId < totalGames, "Invalid game ID");
+    Game storage game = games[gameId];
+    require(game.winner == msg.sender, "Player is not the winner of the match");
+    require(game.gameState == States.Over, "Board validity not checked in this phase");
+
+    uint8 placed_ships = 0;
+    bytes32 root = game.merkleRoots[msg.sender];
+
+    for (uint256 i = 0; i < result.length; i++){
+      if(verify(root, result[i], salt[i], proof[i]))
+        placed_ships = (result[i] == true? placed_ships+1 : placed_ships);
+      else{
+        emit CheatingDetected(gameId, msg.sender);
+        address winner = (msg.sender == game.player1? game.player2 : game.player1);
+        declareWinner(gameId, winner);
+        return;
+      }
+    }
+
+    if(placed_ships != game.winning_score){
+      emit CheatingDetected(gameId, msg.sender);
+      address winner = (msg.sender == game.player1? game.player2 : game.player1);
+      declareWinner(gameId, winner);
+    }
+    else{
+      declareWinner(gameId, msg.sender);
+    }
+  }
+
+  function checkForWin(uint256 gameId,address player) private {
+
+    Game storage game=games[gameId];
+    if(game.scores[player] == game.winning_score){
+      game.winner = address(uint160(player));
+      emit WaitingForBoardValidation(gameId, player);
       game.gameState = States.Over;
     }
+  }
+
+  function declareWinner(uint256 gameId, address winner) private{
+    Game storage game=games[gameId];
+    emit Winner(gameId, winner);
+    game.winner = address(uint160(winner));
+    game.gameState = States.Rewarded;
+    game.winner.transfer(game.balance);
   }
 }

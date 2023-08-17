@@ -5,15 +5,16 @@ const { MerkleTree } = require("merkletreejs");
 const keccak256 = require('keccak256');
 //const crypto = require('crypto')
 const Buffer = require('buffer').Buffer;
-const ethJSABI = require("ethjs");
+const ethJS = require("ethjs");
+const SALT_LENGTH = Math.pow(2,32);
 
 class Tree {
   constructor(transactions) {
     this.transactions = transactions;
-    this.salts = transactions.map(() => Math.floor(Math.random()*Math.pow(2,16)).toString());
+    this.salts = transactions.map(() => Math.floor(Math.random()*SALT_LENGTH).toString());
 
     const leaves = transactions.map((transaction, index) => 
-                                      keccak256(ethJSABI.abi.encodeParams(['bool','uint16'],[transaction,this.salts[index]])));
+                                      keccak256(ethJS.abi.encodeParams(['bool','uint32'],[transaction,this.salts[index]])));
     this.tree = new MerkleTree(leaves, keccak256,{ sort: true });
   }
 
@@ -26,7 +27,7 @@ class Tree {
       throw new Error("Invalid index");
     }
 
-    const leaf = keccak256(ethJSABI.abi.encodeParams(['bool','uint16'],[this.transactions[index],this.salts[index]]))
+    const leaf = keccak256(ethJS.abi.encodeParams(['bool','uint32'],[this.transactions[index],this.salts[index]]))
     return {
       "proof": this.tree.getHexProof(leaf),
       "salt": this.salts[index],

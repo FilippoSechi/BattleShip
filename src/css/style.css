@@ -309,3 +309,7 @@ body {
 #gameIdDisplay{
   font-weight: bold;
 }
+
+#pay{
+  display: none;
+}
