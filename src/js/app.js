@@ -566,6 +566,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
               App.fireEventWatcher(instance);
 
+              document.getElementById("accuse").style.display='inline';
+            document.getElementById("accuse").disabled = false;
+            document.getElementById("accuse").addEventListener('click',App.accuse);
+
               //Set event listeners for shooting enemy ships
               computerSquares.forEach(square => {
                 square.addEventListener('click', async () =>{
@@ -611,9 +615,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }).then(function(result) {
         console.log("BoardCommitment -> gas used ",result.receipt.gasUsed);
           setupButtons.style.display = 'none';
-          document.getElementById("accuse").style.display='inline';
-          document.getElementById("accuse").disabled = false;
-          document.getElementById("accuse").addEventListener('click',App.accuse);
 
           App.CheatingDetectedWatcher(battleshipInstance);
           App.WinnerWatcher(battleshipInstance);
