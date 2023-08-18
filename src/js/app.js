@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let playerNum = 1
   const width = 10
   let allShipsPlaced = false
+  let sendingProof = false
+  let fireSent = false
 
   //Ships
   const shipArray = [
@@ -277,117 +279,19 @@ document.addEventListener('DOMContentLoaded', () => {
   //Highlights player status bar (READY)
   function playerReady(num) {
     let player = `.p${parseInt(num)}`
-    document.querySelector(`${player} .ready`).classList.toggle('active')
-  }
-
-  let destroyerCount = 0
-  let submarineCount = 0
-  let cruiserCount = 0
-  let battleshipCount = 0
-  let carrierCount = 0
-
-  /*
-  function revealSquare(classList) {
-    const enemySquare = computerGrid.querySelector(`div[data-id='${shotFired}']`)
-    const obj = Object.values(classList)
-    if (!enemySquare.classList.contains('boom') && currentPlayer === 'user' && !isGameOver) {
-      if (obj.includes('destroyer')) destroyerCount++
-      if (obj.includes('submarine')) submarineCount++
-      if (obj.includes('cruiser')) cruiserCount++
-      if (obj.includes('battleship')) battleshipCount++
-      if (obj.includes('carrier')) carrierCount++
-    }
-    if (obj.includes('taken')) {
-      enemySquare.classList.add('boom')
-    } else {
-      enemySquare.classList.add('miss')
-    }
-    checkForWins()
-    currentPlayer = 'enemy'
-  }*/
-
-  let cpuDestroyerCount = 0
-  let cpuSubmarineCount = 0
-  let cpuCruiserCount = 0
-  let cpuBattleshipCount = 0
-  let cpuCarrierCount = 0
-
-/*
-  function enemyGo(square) {
-
-    const hit = userSquares[square].classList.contains('taken')
-    userSquares[square].classList.add(hit ? 'boom' : 'miss')
-    if (userSquares[square].classList.contains('destroyer')) cpuDestroyerCount++
-    if (userSquares[square].classList.contains('submarine')) cpuSubmarineCount++
-    if (userSquares[square].classList.contains('cruiser')) cpuCruiserCount++
-    if (userSquares[square].classList.contains('battleship')) cpuBattleshipCount++
-    if (userSquares[square].classList.contains('carrier')) cpuCarrierCount++
-    checkForWins()
-    currentPlayer = 'user'
-    turnDisplay.innerHTML = 'Your Go'
-  }
-
-  function checkForWins() {
-    if (destroyerCount === 2) {
-      infoDisplay.innerHTML = `You sunk the enemy's destroyer`
-      destroyerCount = 10
-    }
-    if (submarineCount === 3) {
-      infoDisplay.innerHTML = `You sunk the enemy's submarine`
-      submarineCount = 10
-    }
-    if (cruiserCount === 3) {
-      infoDisplay.innerHTML = `You sunk the enemy's cruiser`
-      cruiserCount = 10
-    }
-    if (battleshipCount === 4) {
-      infoDisplay.innerHTML = `You sunk the enemy's battleship`
-      battleshipCount = 10
-    }
-    if (carrierCount === 5) {
-      infoDisplay.innerHTML = `You sunk the enemy's carrier`
-      carrierCount = 10
-    }
-    if (cpuDestroyerCount === 2) {
-      infoDisplay.innerHTML = `Enemy sunk your destroyer`
-      cpuDestroyerCount = 10
-    }
-    if (cpuSubmarineCount === 3) {
-      infoDisplay.innerHTML = 'Enemy sunk your submarine'
-      cpuSubmarineCount = 10
-    }
-    if (cpuCruiserCount === 3) {
-      infoDisplay.innerHTML = `Enemy sunk your cruiser`
-      cpuCruiserCount = 10
-    }
-    if (cpuBattleshipCount === 4) {
-      infoDisplay.innerHTML = `Enemy sunk your battleship`
-      cpuBattleshipCount = 10
-    }
-    if (cpuCarrierCount === 5) {
-      infoDisplay.innerHTML = `Enemy sunk your carrier`
-      cpuCarrierCount = 10
-    }
-
-    if ((destroyerCount + submarineCount + cruiserCount + battleshipCount + carrierCount) === 50) {
-      infoDisplay.innerHTML = "YOU WIN"
-      gameOver()
-    }
-    if ((cpuDestroyerCount + cpuSubmarineCount + cpuCruiserCount + cpuBattleshipCount + cpuCarrierCount) === 50) {
-      infoDisplay.innerHTML = `ENEMY WINS`
-      gameOver()
-    }
-  }*/
-
-  function gameOver() {
-    isGameOver = true
+    const element = document.querySelector(`${player} .ready`);
+    if (!element.classList.contains('active')) 
+      element.classList.add('active');
   }
 
   //Highlights player status bar (CONNECTED)
   function playerConnected (num){
-    let player = `.p${parseInt(num)}`;
-    document.querySelector(`${player} .connected`).classList.toggle('active');
+    let player = `.p${parseInt(num)}`
+    const element = document.querySelector(`${player} .connected`);
+    if (!element.classList.contains('active'))
+      element.classList.add('active');
   }
+
 
   function bindEvents() {
     $(document).on('click', '#rand_game', App.joinRandomGame);
@@ -404,6 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
     account: '',
     merkleTree: null,
     price: 0,
+    timer: null,
   
     init: async function() {
       return await App.initWeb3();
@@ -459,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
           battleshipInstance = instance;
           return battleshipInstance.joinRandomGame(App.price,{ from: App.account });
         }).then(function(result) {
-          
+            console.log("JoinRandomGame -> gas used ",result.receipt.gasUsed);
             //Player created a new game
             if(result.logs[0].event === "GameCreated"){
               //Save gameId
@@ -468,6 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
               console.log("EVENT GameCreated: %d",App.gameId);
               //Wait for the second player to join
               App.playerJoinedWatcher(battleshipInstance);
+              App.disableButtons();
             }
 
             //Player joined a pre-existent game
@@ -484,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
               App.PayedEventWatcher(battleshipInstance);
               //Watch for opponent board commitment
               App.playerReadyWatcher(battleshipInstance);
+              App.disableButtons();
             }
           }).catch(e => {
           console.error(e.message);
@@ -512,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return battleshipInstance.joinGame(gameId,{ from: App.account });
         }).then(function(result) {
           
+          console.log("JoinSpecificGame -> gas used ",result.receipt.gasUsed);
             App.price = parseInt(result.logs[0].args.price);
             document.getElementById("gamePrice").value = App.price;
             document.getElementById("gameIdDisplay").textContent =gameId;
@@ -526,6 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
             App.PayedEventWatcher(battleshipInstance);
             //Watch for opponent board commitment
             App.playerReadyWatcher(battleshipInstance);
+            App.disableButtons();
           }
           ).catch(e => {
           console.error(e.message);
@@ -552,6 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
           battleshipInstance = instance;
           return battleshipInstance.createPrivateGame(App.price,{ from: App.account });
         }).then(function(result) {
+          console.log("CreatePrivateGame -> gas used ",result.receipt.gasUsed);
           // The createPrivateGame function should not return anything,
           // so this block will be executed when the transaction is mined.
             App.gameId = parseInt(result.logs[0].args.gameId);
@@ -561,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
             //Wait for another player to join the game
             App.playerJoinedWatcher(battleshipInstance);
-            
+            App.disableButtons();
           }).catch(e => {
           console.error(e.message);
         })}
@@ -609,12 +519,19 @@ document.addEventListener('DOMContentLoaded', () => {
         App.contracts.Battleship.deployed().then(function(instance){
           const battleshipInstance = instance;
           return battleshipInstance.pay(App.gameId, {from: App.account, value: App.price}).then(function(result){
+            console.log("Pay -> gas used ",result.receipt.gasUsed);
             console.log("EVENT: PAYED %s",result.logs[0].args.player);
             document.getElementById("pay").style.display = 'none';
           })
         }).catch((e)=> console.error(e));
     },
     
+    disableButtons: function(){
+      document.getElementById("priv_game").disabled = true;
+      document.getElementById("rand_game").disabled = true;
+      document.getElementById("join_game").disabled = true;
+    },
+
     //Watch for the event playerReady (board committed)
     playerReadyWatcher: function (instance){
       instance.PlayerReady().watch(async (error,result)=>{
@@ -691,9 +608,16 @@ document.addEventListener('DOMContentLoaded', () => {
         App.buildTree();
         const root = App.merkleTree.getRoot();
         return battleshipInstance.commitBoard(App.gameId, root,{ from: App.account });
-      }).then(function() {
-
+      }).then(function(result) {
+        console.log("BoardCommitment -> gas used ",result.receipt.gasUsed);
           setupButtons.style.display = 'none';
+          document.getElementById("accuse").style.display='inline';
+          document.getElementById("accuse").disabled = false;
+          document.getElementById("accuse").addEventListener('click',App.accuse);
+
+          App.CheatingDetectedWatcher(battleshipInstance);
+          App.WinnerWatcher(battleshipInstance);
+          App.WaitingForBoardValidationWatcher(battleshipInstance);
 
         }).catch(e => {
         console.error(e.message);
@@ -741,12 +665,30 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     },
 
+    accuse : function(){
+      timer = setInterval(() => {
+        App.contracts.Battleship.deployed().then(function(instance) {
+          battleshipInstance = instance;
+          return battleshipInstance.accusePlayer(App.gameId, { from: App.account });
+          }).then(function(result) {
+          console.log("accusePlayer -> gas used ",result.receipt.gasUsed);
+          document.getElementById("accuse").disabled = true;  
+          }).catch(e => {
+          console.error(e.message);
+        });
+      }, 60000);
+    },
+
     //Send fire to enemy
     fire: function(instance, square) {
-      instance.fire(App.gameId, square, { from: App.account }).then(async () =>{
+      if(fireSent) return;
+        fireSent = true;
+      instance.fire(App.gameId, square, { from: App.account }).then(async (result) =>{
           try{
+            console.log("Fire -> gas used ",result.receipt.gasUsed);
             //Wait for the result of the shot to be emitted from the opponent
             await App.getShotResult(instance, square);
+            fireSent = false;
           } catch (e) {
               console.error(e.message);
           }
@@ -784,12 +726,17 @@ document.addEventListener('DOMContentLoaded', () => {
           console.log(error);
         } else {
             try {
+              if(sendingProof) return;
+
               // Check if event corresponds to my game
               if (parseInt(result.args.gameId) != App.gameId) return;
               // if I am the victim
               if (result.args.victim != App.account) return;
-
+              sendingProof = true;
+              document.getElementById("accuse").disabled = false;
+              clearInterval(timer);
               const coordinate = parseInt(result.args.coordinate);
+
               console.log("EVENT Fire: %d %d %s", App.gameId, coordinate, App.account);
 
               // Store the result of the enemy's shot
@@ -797,27 +744,105 @@ document.addEventListener('DOMContentLoaded', () => {
               // Build merkle proof
               const proof = App.merkleTree.getProof(coordinate);
               //Send proof to smart contract
-              instance.shotResult(App.gameId, coordinate, hit, proof["salt"], proof["proof"], { from: App.account })
-              .then(function(shotresult){
-                // Check if the verification was successful
-                if (shotresult.logs[0].event === "ShotResult") {
-                    userSquares[coordinate].classList.add(hit ? 'boom' : 'miss');
-                /////////////////////////////////////
-                // TODO: Implement cheating detection
-                ///////////////////////////////////
-                turnDisplay.innerHTML = "Your go";
+              const emittedEvent = await App.sendShotResult(coordinate,hit,proof["salt"],proof["proof"]); 
+              sendingProof = false;
+              // Check if the verification was successful
+              if (emittedEvent === "ShotResult") {
+                  userSquares[coordinate].classList.add(hit ? 'boom' : 'miss');
+                  turnDisplay.innerHTML = "Your go";
               }
-              }).catch((e)=> console.log(e))
-
-              
-            } catch (e) {
-                console.error(e.message);
+              else if (emittedEvent === "CheatingDetected"){
+                turnDisplay.innerHTML = "DID YOU TRIED TO CHEAT?! YOU LOSE!";
+              }
+              } catch (e) {
+                  console.error(e.message);
             }
         }
     });
-  }
-  };
+  },
 
+  sendShotResult : function(coordinate, hit, salt,proof){
+    return new Promise((resolve, reject) => {
+      App.contracts.Battleship.deployed().then(function(instance) {
+        battleshipInstance = instance;
+        return battleshipInstance.shotResult(App.gameId, coordinate, hit, salt, proof, { from: App.account });
+      }).then((result) => {
+        console.log("SendShotResult -> gas used ",result.receipt.gasUsed);
+        resolve(result.logs[0].event); // Resolve the promise with the result
+      }).catch(e => {
+        console.error(e.message);
+        reject(e); // Reject the promise with the error
+      });
+    });
+  },
+
+  //Watch for the event WaitingForBoardValidation
+  WaitingForBoardValidationWatcher: function (instance){
+    instance.WaitingForBoardValidation().watch(async (error,result)=>{
+        if(error)
+          console.log(error);
+        else if(App.gameId == parseInt(result.args.gameId) && App.account == result.args.player){
+          console.log("EVENT: WAITING FOR BOARD VALIDATION %s", result.args.player);
+          let ship_positions = [];
+          userSquares.forEach(element => {
+            if(element.classList.contains('taken'))
+              ship_positions.push(true);
+            else
+            ship_positions.push(false);
+          });
+          await App.sendBoardVerification(ship_positions);
+        }
+    }
+    );
+  },
+
+  sendBoardVerification : function(position){
+    return new Promise((resolve, reject) => {
+      App.contracts.Battleship.deployed().then(function(instance) {
+        battleshipInstance = instance;
+        return battleshipInstance.checkBoardValidity(App.gameId, position, { from: App.account });
+      }).then((result) => {
+        console.log("CheckBoardValidity -> gas used ",result.receipt.gasUsed);
+        resolve(); // Resolve the promise with the result
+      }).catch(e => {
+        console.error(e.message);
+        reject(e); // Reject the promise with the error
+      });
+    });
+  },
+
+  //Watch for the event CheatingDetected
+  CheatingDetectedWatcher: function (instance){
+    instance.CheatingDetected().watch( (error,result)=>{
+        if(error)
+          console.log(error);
+        else if(App.gameId == parseInt(result.args.gameId) && App.account == result.args.cheater){
+          console.log("EVENT: CHEATING DETECTED %s", result.args.player);
+          turnDisplay.innerHTML = "DID YOU TRIED TO CHEAT?! YOU LOSE!";
+        }
+    }
+    );
+  },
+
+  //Watch for the event Winner
+  WinnerWatcher: function (instance){
+    instance.Winner().watch((error,result)=>{
+        if(error)
+          console.log(error);
+        else if(App.gameId == parseInt(result.args.gameId) && App.account == result.args.winner){
+          console.log("EVENT: WINNER %s", result.args.winner);
+          turnDisplay.innerHTML = "YOU WIN!";
+        }
+        else if(App.gameId == parseInt(result.args.gameId) && App.account != result.args.winner){
+          console.log("EVENT: WINNER %s", result.args.winner);
+          turnDisplay.innerHTML = "YOU LOSE!";
+        }
+    }
+    );
+  }
+
+  };
+  
   $(function() {
     $(window).load(function() {
       App.init();
@@ -826,4 +851,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
 })
 
-//TODO: IMPLEMENT WINNING / GAMEOVER / BOARD VERIFICATION
+//TODO: IMPLEMENT WATCHER FOR WINNING, CHEATING AND BOARD VALIDATION

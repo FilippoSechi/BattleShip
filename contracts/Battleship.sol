@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT 
 pragma solidity >=0.5.0 <0.9.0;
-pragma experimental ABIEncoderV2;
 
 contract Battleship {
   enum States{
@@ -32,6 +31,8 @@ contract Battleship {
     address payable winner;
     uint256 balance;
     uint256 price;
+    uint256 accuse_deadline;
+    address accuser;
   }
 
   mapping(uint256 => Game) public games;
@@ -106,10 +107,34 @@ contract Battleship {
       Game storage existingGame = games[gameId];
       existingGame.player2 = msg.sender;
       existingGame.gameState = States.Connected;
-      emit PlayerJoined(gameId, msg.sender);
+      emit PlayerJoined(gameId, msg.sender,existingGame.price);
     } else {
         createGame(false,price);
     }
+  }
+
+  function accusePlayer(uint256 gameId) external {
+    require(gameId < totalGames, "Invalid game ID");
+    Game storage game = games[gameId];
+    require(game.player1 == msg.sender || game.player2 == msg.sender, "Player does not participate to this game");
+    require(game.gameState == States.Play, "Accuse not possible in this phase");
+    require(game.accuser == address(0) || game.accuser == msg.sender, "Must provide an answer to the previous accuse");
+    
+    if(game.accuser == address(0)){
+      game.accuser = msg.sender;
+      game.accuse_deadline = block.number + 5;
+      return;
+    }
+    if(game.accuse_deadline >= block.number)
+      return;
+    
+    declareWinner(gameId, msg.sender);
+  }
+
+  function respondAccuse(uint256 gameId) private{
+    Game storage game = games[gameId];
+    game.accuser = address(0);
+    game.accuse_deadline = 0;
   }
 
   function commitBoard(uint256 gameId, bytes32 root) external {
@@ -165,6 +190,7 @@ contract Battleship {
     require(!game.waiting_result, "Waiting for the result of previous shots");
     require(!game.shots[msg.sender][coordinate].verified, "Player already fired to this coordinate");
 
+    respondAccuse(gameId);
     game.waiting_result = true;
     address victim;
     if(game.current_turn == game.player1)
@@ -226,8 +252,8 @@ function verify(bytes32 root, bool result, uint32 salt, bytes32[] memory proof) 
     return computedHash == root;
 
   }
-  
-  function checkBoardValidity(uint256 gameId, bool [] memory result, uint32 [] memory salt, bytes32[][] memory proof) public{
+
+  function checkBoardValidity(uint256 gameId, bool [] memory result) public{
 
     require(gameId < totalGames, "Invalid game ID");
     Game storage game = games[gameId];
@@ -235,20 +261,10 @@ function verify(bytes32 root, bool result, uint32 salt, bytes32[] memory proof) 
     require(game.gameState == States.Over, "Board validity not checked in this phase");
 
     uint8 placed_ships = 0;
-    bytes32 root = game.merkleRoots[msg.sender];
+    for(uint256 i = 0; i < result.length; i++)
+      placed_ships = (result[i] == true? placed_ships+1 : placed_ships);
 
-    for (uint256 i = 0; i < result.length; i++){
-      if(verify(root, result[i], salt[i], proof[i]))
-        placed_ships = (result[i] == true? placed_ships+1 : placed_ships);
-      else{
-        emit CheatingDetected(gameId, msg.sender);
-        address winner = (msg.sender == game.player1? game.player2 : game.player1);
-        declareWinner(gameId, winner);
-        return;
-      }
-    }
-
-    if(placed_ships != game.winning_score){
+    if(placed_ships < game.winning_score){
       emit CheatingDetected(gameId, msg.sender);
       address winner = (msg.sender == game.player1? game.player2 : game.player1);
       declareWinner(gameId, winner);
