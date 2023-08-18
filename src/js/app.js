@@ -667,7 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
 
     accuse : function(){
-      timer = setInterval(() => {
+      App.timer = setInterval(() => {
         App.contracts.Battleship.deployed().then(function(instance) {
           battleshipInstance = instance;
           return battleshipInstance.accusePlayer(App.gameId, { from: App.account });
@@ -735,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
               if (result.args.victim != App.account) return;
               sendingProof = true;
               document.getElementById("accuse").disabled = false;
-              clearInterval(timer);
+              clearInterval(App.timer);
               const coordinate = parseInt(result.args.coordinate);
 
               console.log("EVENT Fire: %d %d %s", App.gameId, coordinate, App.account);
