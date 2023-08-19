@@ -616,8 +616,8 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("BoardCommitment -> gas used ",result.receipt.gasUsed);
           setupButtons.style.display = 'none';
 
-          App.CheatingDetectedWatcher(battleshipInstance);
           App.WinnerWatcher(battleshipInstance);
+          App.CheatingDetectedWatcher(battleshipInstance);
           App.WaitingForBoardValidationWatcher(battleshipInstance);
 
         }).catch(e => {
