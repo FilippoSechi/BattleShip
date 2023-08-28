@@ -245,21 +245,29 @@ document.addEventListener('DOMContentLoaded', () => {
     } else return
 
     displayGrid.removeChild(draggedShip)
-    //Check if all ships are correctly placed
+    //Check if all ships are placed
+    //Comment this to enable client-side board validity check
+    if(!displayGrid.querySelector('.ship')){ 
+      infoDisplay.innerHTML = ""
+        allShipsPlaced = true;
+        return;
+    }
+    //Uncomment this to enable client-side board validity check
+    /*
     if(!displayGrid.querySelector('.ship')){ 
       if(checkPlacementValidity()){
         infoDisplay.innerHTML = ""
         allShipsPlaced = true;
         return;
       }
-      else{
+       else{
         //Invalid placement. Reset all
         resetBoard(userGrid, userSquares);
         infoDisplay.innerHTML = "Placement is not valid"
         allShipsPlaced = false;
         return;
       }
-    }
+    }*/
   }
    
   //Check if some ships where mistakenly placed
@@ -365,6 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return battleshipInstance.joinRandomGame(App.price,{ from: App.account });
         }).then(function(result) {
             console.log("JoinRandomGame -> gas used ",result.receipt.gasUsed);
+            document.getElementById("gamePrice").readOnly = true;
             //Player created a new game
             if(result.logs[0].event === "GameCreated"){
               //Save gameId
@@ -422,6 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
           console.log("JoinSpecificGame -> gas used ",result.receipt.gasUsed);
             App.price = parseInt(result.logs[0].args.price);
             document.getElementById("gamePrice").value = App.price;
+            document.getElementById("gamePrice").readOnly = true;
             document.getElementById("gameIdDisplay").textContent =gameId;
             App.gameId = gameId;
             console.log("EVENT player2 joined: %d",App.gameId);
@@ -472,6 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
             //Wait for another player to join the game
             App.playerJoinedWatcher(battleshipInstance);
             App.disableButtons();
+            document.getElementById("gamePrice").readOnly = true;
           }).catch(e => {
           console.error(e.message);
         })}
@@ -666,18 +677,24 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     },
 
-    accuse : function(){
-      App.timer = setInterval(() => {
-        App.contracts.Battleship.deployed().then(function(instance) {
-          battleshipInstance = instance;
-          return battleshipInstance.accusePlayer(App.gameId, { from: App.account });
-          }).then(function(result) {
-          console.log("accusePlayer -> gas used ",result.receipt.gasUsed);
-          document.getElementById("accuse").disabled = true;  
-          }).catch(e => {
-          console.error(e.message);
-        });
-      }, 60000);
+    accuse: function() {
+      // Execute the function immediately
+      App.executeAccusation();
+    
+      // Set an interval to execute the function every 60000 milliseconds
+      App.timer = setInterval(this.executeAccusation, 60000);
+    },
+    
+    executeAccusation: function() {
+      App.contracts.Battleship.deployed().then(function(instance) {
+        battleshipInstance = instance;
+        return battleshipInstance.accusePlayer(App.gameId, { from: App.account });
+      }).then(function(result) {
+        console.log("accusePlayer -> gas used ", result.receipt.gasUsed);
+        document.getElementById("accuse").disabled = true;
+      }).catch(e => {
+        console.error(e.message);
+      });
     },
 
     //Send fire to enemy

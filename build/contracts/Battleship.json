@@ -38003,12 +38003,12 @@
     "5777": {
       "events": {},
       "links": {},
-      "address": "0xF7412DF98d84e59d99beBa7903c100b0eee199D3",
-      "transactionHash": "0x05a1fde3152ed636279ac47c5b2ec0297343e879dd42f4d30268e4c901a57431"
+      "address": "0x324F4C4917ac6AA377A526D75cbB3696FBDA122E",
+      "transactionHash": "0xac9348c7cfd5a4a6d3d29567572b1df85afa2d1ec5e7be9681fd4dd4478bffdf"
     }
   },
   "schemaVersion": "3.4.13",
-  "updatedAt": "2023-08-18T23:46:45.448Z",
+  "updatedAt": "2023-08-28T11:19:07.818Z",
   "networkType": "ethereum",
   "devdoc": {
     "methods": {}
